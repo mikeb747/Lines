@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <rect x="36" y="36" width="440" height="440" rx="68" stroke="#1E293B" stroke-width="6"/>
+  <!-- Grating grooves / spectral lines -->
+  <line x1="120" y1="96" x2="120" y2="416" stroke="#334155" stroke-width="4" stroke-dasharray="8 8"/>
+  <line x1="256" y1="80" x2="256" y2="432" stroke="#06B6D4" stroke-width="6"/>
+  <line x1="392" y1="96" x2="392" y2="416" stroke="#334155" stroke-width="4" stroke-dasharray="8 8"/>
+  <!-- Neon emission peak waveform -->
+  <path d="M64 368 L132 368 L154 220 L176 368 L222 368 L256 108 L290 368 L340 368 L364 184 L388 368 L448 368" stroke="#22D3EE" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Primary Calibration Line (PCL) marker -->
+  <circle cx="256" cy="108" r="14" fill="#F59E0B" stroke="#0F172A" stroke-width="6"/>
+</svg>
