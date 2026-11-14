@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyCcdArchitecture,
   CalibrationParameters,
   getLaserWavenumberCm1,
   solveCalibration,
@@ -149,3 +150,21 @@ test('File auditor flags confusion risk (17484.88 vs 17347.80), clustering, and 
   assert.equal(auditRepaired.overallStatus, 'PASS');
   assert.equal(auditRepaired.failCount, 0);
 });
+
+test('Selecting BDA automatically unticks enforceCcdCutoff and selecting FDA ticks enforceCcdCutoff', () => {
+  const bdaParams = applyCcdArchitecture(
+    { ...BASE_PARAMS, laserNm: 785 },
+    'BDA'
+  );
+  assert.equal(bdaParams.ccdType, 'BDA');
+  assert.equal(bdaParams.enforceCcdCutoff, false);
+  const solBda = solveCalibration(bdaParams);
+  assert.equal(solBda.effectiveRamanMaxCm1, 4000);
+
+  const fdaParams = applyCcdArchitecture(bdaParams, 'FDA');
+  assert.equal(fdaParams.ccdType, 'FDA');
+  assert.equal(fdaParams.enforceCcdCutoff, true);
+  const solFda = solveCalibration(fdaParams);
+  assert.equal(solFda.effectiveRamanMaxCm1, 3500);
+});
+

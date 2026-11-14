@@ -8,7 +8,6 @@ import {
   Upload,
   Wand2,
   Download,
-  FileSpreadsheet,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -20,7 +19,6 @@ interface FileCheckerViewProps {
   onAutoRepairFile: () => void;
   onLoadFlawedDemo: () => void;
   onExportCalFile: () => void;
-  onExportCsvReport: () => void;
 }
 
 export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
@@ -29,7 +27,6 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
   onAutoRepairFile,
   onLoadFlawedDemo,
   onExportCalFile,
-  onExportCsvReport,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { solution, diagnostics, parsedLines } = auditReport;
@@ -136,15 +133,6 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
           >
             <Wand2 className="h-3.5 w-3.5" />
             Auto-Repair & Apply Optimal Lines
-          </button>
-
-          <button
-            type="button"
-            onClick={onExportCsvReport}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            Export Audit CSV
           </button>
         </div>
       </div>

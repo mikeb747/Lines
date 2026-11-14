@@ -78,6 +78,22 @@ export interface CalibrationSolution {
 }
 
 /**
+ * Updates the CCD architecture and automatically sets `enforceCcdCutoff`:
+ * - FDA (Front-side Direct Architecture): ticks `enforceCcdCutoff = true` (~9800 cm^-1 cutoff active)
+ * - BDA (Back-Illuminated / Back-Thinned): unticks `enforceCcdCutoff = false`
+ */
+export function applyCcdArchitecture(
+  params: CalibrationParameters,
+  ccdType: CCDArchitecture
+): CalibrationParameters {
+  return {
+    ...params,
+    ccdType,
+    enforceCcdCutoff: ccdType === 'FDA',
+  };
+}
+
+/**
  * Converts nominal laser wavelength (nm) to exact laser wavenumber (cm^-1)
  * matching factory spectrograph conventions:
  * - 633nm HeNe uses 632.800 nm -> 15802.8 cm^-1

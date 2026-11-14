@@ -180,24 +180,27 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({
               <p>2. Select Add to Home Screen to launch in standalone mode.</p>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <p className="font-semibold text-slate-900 dark:text-slate-100">
-                Desktop / Lab Workstation Installation:
+                Desktop Installation &amp; Automated GitHub Actions Deployment:
               </p>
               <p>
                 • In Chrome or Edge, click the Install SpectroCal icon in the
                 address bar (when opened outside an embedded preview frame).
               </p>
               <p>
-                • To deploy on GitHub Pages, build with{' '}
+                • A GitHub Actions workflow is included at{' '}
                 <code className="font-mono text-slate-900 dark:text-slate-100">
-                  npm run build
-                </code>{' '}
-                and publish the static{' '}
+                  .github/workflows/deploy-pwa.yml
+                </code>
+                . In your GitHub repository, go to{' '}
+                <strong>Settings → Pages → Build and deployment</strong> and set
+                Source to <strong>GitHub Actions</strong> to auto-test, build,
+                and publish the PWA on every push to{' '}
                 <code className="font-mono text-slate-900 dark:text-slate-100">
-                  dist/
-                </code>{' '}
-                folder.
+                  main
+                </code>
+                .
               </p>
             </div>
           )}

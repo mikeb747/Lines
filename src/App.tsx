@@ -103,39 +103,6 @@ export default function App() {
     setStatusBanner(`Downloaded calibration specification ${outName}`);
   };
 
-  const handleExportCsvReport = () => {
-    const headers = [
-      'LineNumber',
-      'UploadedWavenumber_cm-1',
-      'NISTReference_cm-1',
-      'Delta_cm-1',
-      'WavelengthAir_nm',
-      'RelativeIntensity',
-      'Role',
-      'OccurrencesAcrossCCD',
-      'Status',
-      'Notes',
-    ];
-    const rows = auditReport.parsedLines.map((r) => [
-      r.rawLineNumber,
-      r.wavenumberCm1.toFixed(2),
-      r.matchedCatalogLine ? r.matchedCatalogLine.wavenumber.toFixed(2) : '',
-      r.catalogDeltaCm1 !== null ? r.catalogDeltaCm1.toFixed(2) : '',
-      r.matchedCatalogLine
-        ? r.matchedCatalogLine.wavelengthAirNm.toFixed(3)
-        : (1e7 / r.wavenumberCm1).toFixed(3),
-      r.declaredIntensity ?? r.matchedCatalogLine?.relativeIntensity ?? '',
-      r.declaredRole || 'STANDARD',
-      r.occurrencesAcrossCcd,
-      r.status.toUpperCase(),
-      `"${(r.issueMessages.join('; ') || r.matchedCatalogLine?.notes || '').replace(/"/g, '""')}"`,
-    ]);
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const csvName = `${fileName.replace(/\.[^.]+$/, '')}_audit_report.csv`;
-    triggerDownload(csvName, csv, 'text/csv;charset=utf-8');
-    setStatusBanner(`Downloaded CSV audit report ${csvName}`);
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Top Bar Contract: Zone 1 (Brand) — Zone 2 (4 Nav Links) — Zone 3 (1 Primary Action) */}
@@ -384,7 +351,6 @@ export default function App() {
               onAutoRepairFile={handleAutoRepairFile}
               onLoadFlawedDemo={handleLoadFlawedDemo}
               onExportCalFile={handleExportCalFile}
-              onExportCsvReport={handleExportCsvReport}
             />
           )}
 

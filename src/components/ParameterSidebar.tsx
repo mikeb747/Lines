@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  applyCcdArchitecture,
   CalibrationParameters,
   CCDArchitecture,
   FilterType,
@@ -361,7 +362,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             <button
               key={c.id}
               type="button"
-              onClick={() => update('ccdType', c.id)}
+              onClick={() => onChangeParams(applyCcdArchitecture(params, c.id))}
               className={`rounded-md py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
                 params.ccdType === c.id
                   ? 'bg-white text-slate-900 shadow-xs'
