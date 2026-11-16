@@ -17,8 +17,8 @@ interface ParameterSidebarProps {
   onResetDefaults: () => void;
 }
 
-const LASER_OPTIONS = [532, 633, 660, 785, 830];
-const GRATING_OPTIONS = [600, 1200, 1800, 2400, 3000];
+const LASER_OPTIONS = [405, 457, 532, 633, 660, 785, 830];
+const GRATING_OPTIONS = [600, 1200, 1500, 1800, 2400, 3000];
 const SPECTROGRAPH_OPTIONS: SpectrographModel[] = ['inVia', 'Virsa', 'Strava'];
 
 export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
@@ -122,7 +122,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               {(1e7 / params.laserNm).toFixed(1)} cm⁻¹
             </span>
           </div>
-          <div className="grid grid-cols-5 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-1 mb-2">
             {LASER_OPTIONS.map((nm) => (
               <button
                 key={nm}
@@ -160,7 +160,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
           <span className="block text-xs font-medium text-slate-600 mb-1.5">
             Grating Groove Density (lines/mm)
           </span>
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-3 gap-1.5">
             {GRATING_OPTIONS.map((g) => (
               <button
                 key={g}

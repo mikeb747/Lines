@@ -6,8 +6,8 @@ export type CCDArchitecture = 'FDA' | 'BDA';
 
 export interface CalibrationParameters {
   spectrograph: SpectrographModel;
-  laserNm: number; // Nominal laser wavelength in nm (e.g., 532, 633, 660, 785, 830)
-  gratingLinesPerMm: number; // Groove density in l/mm (e.g., 600, 1200, 1800, 2400)
+  laserNm: number; // Nominal laser wavelength in nm (e.g., 405, 457, 532, 633, 660, 785, 830)
+  gratingLinesPerMm: number; // Groove density in l/mm (e.g., 600, 1200, 1500, 1800, 2400, 3000)
   filterType: FilterType;
   customRamanMinCm1: number; // Used when filterType === 'custom' or overridden
   customRamanMaxCm1: number;
@@ -250,9 +250,17 @@ export function evaluateConfusionRisks(
       ? 0.035
       : gratingLinesPerMm <= 1200
         ? 0.022
-        : 0.015;
+        : gratingLinesPerMm <= 1500
+          ? 0.018
+          : 0.015;
   const baseToleranceCm1 =
-    gratingLinesPerMm <= 600 ? 138 : gratingLinesPerMm <= 1200 ? 78 : 48;
+    gratingLinesPerMm <= 600
+      ? 138
+      : gratingLinesPerMm <= 1200
+        ? 78
+        : gratingLinesPerMm <= 1500
+          ? 62
+          : 48;
 
   for (let i = 0; i < sorted.length - 1; i++) {
     const line = sorted[i];
@@ -562,7 +570,9 @@ export function solveCalibration(
         ? 220
         : params.gratingLinesPerMm <= 1200
           ? 145
-          : 95
+          : params.gratingLinesPerMm <= 1500
+            ? 120
+            : 95
     ).toFixed(1)
   );
 

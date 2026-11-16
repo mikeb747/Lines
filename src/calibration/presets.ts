@@ -88,6 +88,20 @@ const params633_600: CalibrationParameters = {
   filterType: 'standard',
 };
 
+const params405_2400: CalibrationParameters = {
+  ...DEFAULT_BASE_PARAMS,
+  laserNm: 405,
+  gratingLinesPerMm: 2400,
+  filterType: 'standard',
+};
+
+const params457_1500: CalibrationParameters = {
+  ...DEFAULT_BASE_PARAMS,
+  laserNm: 457,
+  gratingLinesPerMm: 1500,
+  filterType: 'standard',
+};
+
 /**
  * Intentionally flawed 532nm / 600 l/mm calibration file demonstrating the exact
  * engineering failure modes described in the specification:
@@ -199,5 +213,25 @@ export const FACTORY_PRESETS: FactoryPreset[] = [
     params: params660_1200,
     sampleFileName: '660nm_1200lmm_cal.cal',
     sampleFileContent: makePresetFile(params660_1200),
+  },
+  {
+    id: '457-1500-std',
+    label: '457 nm · 1500 l/mm — Standard Filter (50–4000 cm⁻¹)',
+    shortTag: '457nm / 1500 l/mm',
+    description:
+      'Blue 457 nm excitation with 1500 l/mm grating. Abs range 21831.8–17881.8 cm⁻¹, Primary Calibration Line (PCL) at 19874.61 cm⁻¹.',
+    params: params457_1500,
+    sampleFileName: '457nm_1500lmm_cal.cal',
+    sampleFileContent: makePresetFile(params457_1500),
+  },
+  {
+    id: '405-2400-std',
+    label: '405 nm · 2400 l/mm — Standard Filter (50–4000 cm⁻¹)',
+    shortTag: '405nm / 2400 l/mm',
+    description:
+      'Violet-UV 405 nm excitation with 2400 l/mm high-density grating. Abs range 24641.4–20691.4 cm⁻¹, Primary Calibration Line (PCL) at 22668.42 cm⁻¹.',
+    params: params405_2400,
+    sampleFileName: '405nm_2400lmm_cal.cal',
+    sampleFileContent: makePresetFile(params405_2400),
   },
 ];

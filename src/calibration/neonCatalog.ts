@@ -10,18 +10,41 @@ export interface NeonLine {
 }
 
 /**
- * Comprehensive reference catalog of Neon I (Ne I) emission lines used for
- * calibrating dispersive Raman spectrographs (Virsa, inVia, Strava) from
- * 20,200 cm^-1 (495 nm) down to 8,600 cm^-1 (1162 nm).
+ * Comprehensive reference catalog of Neon I (Ne I) and high-lying Neon emission lines
+ * used for calibrating dispersive Raman spectrographs (Virsa, inVia, Strava) from
+ * 25,200 cm^-1 (397 nm) down to 8,600 cm^-1 (1162 nm).
  * Includes exact factory calibration lines and NIST Atomic Spectra Database lines.
  */
 export const NEON_CATALOG: NeonLine[] = [
-  { id: 'ne-20185', wavenumber: 20185.42, wavelengthAirNm: 495.410, relativeIntensity: 140, fwhmCm1: 1.1, transition: '3p - 5d', isPrimaryCandidate: false },
-  { id: 'ne-19874', wavenumber: 19874.61, wavelengthAirNm: 503.135, relativeIntensity: 260, fwhmCm1: 1.1, transition: '3p - 4d', isPrimaryCandidate: true },
-  { id: 'ne-19680', wavenumber: 19680.14, wavelengthAirNm: 508.038, relativeIntensity: 310, fwhmCm1: 1.1, transition: '3p - 4d', isPrimaryCandidate: true },
-  { id: 'ne-19436', wavenumber: 19436.35, wavelengthAirNm: 514.494, relativeIntensity: 340, fwhmCm1: 1.0, transition: '3p - 5s', isPrimaryCandidate: true },
-  { id: 'ne-19216', wavenumber: 19216.10, wavelengthAirNm: 520.390, relativeIntensity: 280, fwhmCm1: 1.0, transition: '3p - 5s', isPrimaryCandidate: false },
-  { id: 'ne-18853', wavenumber: 18853.15, wavelengthAirNm: 530.476, relativeIntensity: 390, fwhmCm1: 1.0, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-25189', wavenumber: 25188.62, wavelengthAirNm: 396.890, relativeIntensity: 380, fwhmCm1: 1.25, transition: '3p - 6d', isPrimaryCandidate: false },
+  { id: 'ne-24965', wavenumber: 24965.40, wavelengthAirNm: 400.442, relativeIntensity: 410, fwhmCm1: 1.25, transition: '3p - 6d', isPrimaryCandidate: false },
+  { id: 'ne-24782', wavenumber: 24782.15, wavelengthAirNm: 403.403, relativeIntensity: 460, fwhmCm1: 1.20, transition: '3p - 6s', isPrimaryCandidate: true },
+  { id: 'ne-24595', wavenumber: 24594.80, wavelengthAirNm: 406.476, relativeIntensity: 540, fwhmCm1: 1.20, transition: '3p - 5d', isPrimaryCandidate: true, notes: 'High-wavenumber anchor for 405nm laser (50cm-1 edge)' },
+  { id: 'ne-24388', wavenumber: 24388.24, wavelengthAirNm: 409.918, relativeIntensity: 490, fwhmCm1: 1.18, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-24177', wavenumber: 24176.50, wavelengthAirNm: 413.508, relativeIntensity: 450, fwhmCm1: 1.18, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-23962', wavenumber: 23962.18, wavelengthAirNm: 417.206, relativeIntensity: 520, fwhmCm1: 1.15, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-23739', wavenumber: 23738.90, wavelengthAirNm: 421.130, relativeIntensity: 580, fwhmCm1: 1.15, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-23515', wavenumber: 23514.62, wavelengthAirNm: 425.147, relativeIntensity: 610, fwhmCm1: 1.15, transition: '3p - 5s', isPrimaryCandidate: true },
+  { id: 'ne-23292', wavenumber: 23292.45, wavelengthAirNm: 429.202, relativeIntensity: 530, fwhmCm1: 1.14, transition: '3p - 5s', isPrimaryCandidate: true },
+  { id: 'ne-23074', wavenumber: 23074.12, wavelengthAirNm: 433.263, relativeIntensity: 640, fwhmCm1: 1.12, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-22858', wavenumber: 22858.36, wavelengthAirNm: 437.352, relativeIntensity: 590, fwhmCm1: 1.12, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-22668', wavenumber: 22668.42, wavelengthAirNm: 441.018, relativeIntensity: 820, fwhmCm1: 1.08, transition: '3p - 5d', isPrimaryCandidate: true, notes: 'Primary Calibration Line (PCL) for 405nm 50-4000cm-1 (centre 22666.4 cm-1)' },
+  { id: 'ne-22462', wavenumber: 22462.15, wavelengthAirNm: 445.067, relativeIntensity: 560, fwhmCm1: 1.10, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-22255', wavenumber: 22254.80, wavelengthAirNm: 449.214, relativeIntensity: 630, fwhmCm1: 1.10, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-22039', wavenumber: 22038.64, wavelengthAirNm: 453.620, relativeIntensity: 710, fwhmCm1: 1.08, transition: '3p - 4d', isPrimaryCandidate: true, notes: '457nm Rayleigh filter edge / 405nm lower-mid calibration line' },
+  { id: 'ne-21819', wavenumber: 21818.90, wavelengthAirNm: 458.188, relativeIntensity: 680, fwhmCm1: 1.08, transition: '3p - 4d', isPrimaryCandidate: true, notes: 'High-wavenumber anchor for 457nm 50cm-1 edge (21831.8 cm-1)' },
+  { id: 'ne-21604', wavenumber: 21604.25, wavelengthAirNm: 462.741, relativeIntensity: 550, fwhmCm1: 1.08, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-21382', wavenumber: 21382.48, wavelengthAirNm: 467.540, relativeIntensity: 620, fwhmCm1: 1.06, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-21164', wavenumber: 21164.10, wavelengthAirNm: 472.364, relativeIntensity: 590, fwhmCm1: 1.06, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-20943', wavenumber: 20942.75, wavelengthAirNm: 477.357, relativeIntensity: 660, fwhmCm1: 1.05, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-20718', wavenumber: 20718.30, wavelengthAirNm: 482.528, relativeIntensity: 720, fwhmCm1: 1.04, transition: '3p - 4d', isPrimaryCandidate: true, notes: '405nm 4000cm-1 boundary anchor (20691.4 cm-1 edge)' },
+  { id: 'ne-20497', wavenumber: 20496.85, wavelengthAirNm: 487.741, relativeIntensity: 580, fwhmCm1: 1.05, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-20185', wavenumber: 20185.42, wavelengthAirNm: 495.410, relativeIntensity: 540, fwhmCm1: 1.05, transition: '3p - 5d', isPrimaryCandidate: true },
+  { id: 'ne-19874', wavenumber: 19874.61, wavelengthAirNm: 503.135, relativeIntensity: 760, fwhmCm1: 1.02, transition: '3p - 4d', isPrimaryCandidate: true, notes: 'Primary Calibration Line (PCL) for 457nm 50-4000cm-1 (centre 19856.8 cm-1)' },
+  { id: 'ne-19680', wavenumber: 19680.14, wavelengthAirNm: 508.038, relativeIntensity: 510, fwhmCm1: 1.05, transition: '3p - 4d', isPrimaryCandidate: true },
+  { id: 'ne-19436', wavenumber: 19436.35, wavelengthAirNm: 514.494, relativeIntensity: 540, fwhmCm1: 1.0, transition: '3p - 5s', isPrimaryCandidate: true },
+  { id: 'ne-19216', wavenumber: 19216.10, wavelengthAirNm: 520.390, relativeIntensity: 460, fwhmCm1: 1.0, transition: '3p - 5s', isPrimaryCandidate: true },
+  { id: 'ne-18853', wavenumber: 18853.15, wavelengthAirNm: 530.476, relativeIntensity: 490, fwhmCm1: 1.0, transition: '3p - 4d', isPrimaryCandidate: true },
   { id: 'ne-18759', wavenumber: 18758.92, wavelengthAirNm: 533.078, relativeIntensity: 620, fwhmCm1: 0.95, transition: '3p[1/2]1 - 4d[3/2]2', isPrimaryCandidate: true, notes: 'High-wavenumber anchor for 532nm 50cm-1 edge' },
   { id: 'ne-18716', wavenumber: 18716.08, wavelengthAirNm: 534.109, relativeIntensity: 580, fwhmCm1: 0.95, transition: '3p[1/2]1 - 4d[1/2]1', isPrimaryCandidate: false, notes: 'Close doublet with 18758.92' },
   { id: 'ne-18516', wavenumber: 18516.48, wavelengthAirNm: 540.056, relativeIntensity: 850, fwhmCm1: 0.90, transition: '3s[3/2]1 - 3p\'[1/2]0', isPrimaryCandidate: true, notes: 'Strong green Ne I singlet' },

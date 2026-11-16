@@ -168,3 +168,28 @@ test('Selecting BDA automatically unticks enforceCcdCutoff and selecting FDA tic
   assert.equal(solFda.effectiveRamanMaxCm1, 3500);
 });
 
+test('405nm and 457nm lasers and 1500 l/mm grating produce uniform 5-zone calibration solutions', () => {
+  const sol457_1500 = solveCalibration({
+    ...BASE_PARAMS,
+    laserNm: 457,
+    gratingLinesPerMm: 1500,
+  });
+  assert.equal(sol457_1500.absHighCm1, 21831.8);
+  assert.equal(sol457_1500.absLowCm1, 17881.8);
+  assert.equal(sol457_1500.minRequiredLineSpacingCm1, 120);
+  assert.equal(sol457_1500.primaryCalibrationLine?.wavenumber, 19874.61);
+  assert.ok(sol457_1500.selectedLines.length >= 8);
+  assert.ok(sol457_1500.dispersionUniformityScore >= 85);
+
+  const sol405_2400 = solveCalibration({
+    ...BASE_PARAMS,
+    laserNm: 405,
+    gratingLinesPerMm: 2400,
+  });
+  assert.equal(sol405_2400.absHighCm1, 24641.4);
+  assert.equal(sol405_2400.absLowCm1, 20691.4);
+  assert.equal(sol405_2400.primaryCalibrationLine?.wavenumber, 22668.42);
+  assert.ok(sol405_2400.selectedLines.length >= 8);
+  assert.ok(sol405_2400.dispersionUniformityScore >= 85);
+});
+
