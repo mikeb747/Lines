@@ -4,6 +4,119 @@ export type SpectrographModel = 'inVia' | 'Virsa' | 'Strava';
 export type FilterType = 'standard' | 'rpl_pl' | 'custom';
 export type CCDArchitecture = 'FDA' | 'BDA';
 
+/**
+ * Empirical hardware constants from Renishaw WiRE X Calibration (inVia 532nm / 1800 l/mm reference):
+ * - 1316.0 motor steps = 1.00000 degree of grating turret rotation
+ *   (100 steps = 0.07599°, 1000 steps = 0.75988°, 10000 steps = 7.59878°)
+ * - Default focal length = 250.0 mm (249.2607 mm / 249.278 mm after calibration)
+ * - Default included angle = 0.5229 rad / 29.960° (0.523113 rad / 29.970054° after calibration)
+ * - CCD Detector Saturation Ceiling = 1,000,000 counts (above 1,000,000 counts at 1s saturates detector)
+ */
+export const MOTOR_STEPS_PER_DEGREE = 1316.0;
+export const DEFAULT_FOCAL_LENGTH_MM = 250.0;
+export const CALIBRATED_1800_FOCAL_LENGTH_MM = 249.2607;
+export const DEFAULT_INCLUDED_ANGLE_RAD = 0.5229;
+export const CALIBRATED_1800_INCLUDED_ANGLE_RAD = 0.523113;
+export const CCD_SATURATION_LIMIT_COUNTS = 1_000_000;
+
+export interface EmpiricalCutoffBenchmark {
+  cutoffRamanCm1: number;
+  motorSteps: number;
+  turretDegrees: number;
+  viewLowRamanCm1: number;
+  viewHighRamanCm1: number;
+  viewHighAbsCm1: number;
+  viewLowAbsCm1: number;
+  viewSpanCm1: number;
+}
+
+/**
+ * Exact empirical CCD view limits vs. motor steps from the 532nm / 1800 l/mm reference system (update.txt).
+ * Laser excitation = 532.096 nm (18793.6 cm^-1 in WiRE X Calibration).
+ */
+export const EMPIRICAL_1800_CUTOFF_BENCHMARKS: EmpiricalCutoffBenchmark[] = [
+  {
+    cutoffRamanCm1: 0,
+    motorSteps: 36788,
+    turretDegrees: 27.95441,
+    viewLowRamanCm1: -1081.05,
+    viewHighRamanCm1: 928.22,
+    viewHighAbsCm1: 19874.65,
+    viewLowAbsCm1: 17865.38,
+    viewSpanCm1: 2009.27,
+  },
+  {
+    cutoffRamanCm1: 100,
+    motorSteps: 37015,
+    turretDegrees: 28.1269,
+    viewLowRamanCm1: -968.62,
+    viewHighRamanCm1: 1017.63,
+    viewHighAbsCm1: 19762.22,
+    viewLowAbsCm1: 17775.97,
+    viewSpanCm1: 1986.25,
+  },
+  {
+    cutoffRamanCm1: 4000,
+    motorSteps: 53744,
+    turretDegrees: 40.83891,
+    viewLowRamanCm1: 3374.49,
+    viewHighRamanCm1: 4546.59,
+    viewHighAbsCm1: 15419.11,
+    viewLowAbsCm1: 14247.01,
+    viewSpanCm1: 1172.1,
+  },
+  {
+    cutoffRamanCm1: 8000,
+    motorSteps: 81385,
+    turretDegrees: 61.84271,
+    viewLowRamanCm1: 7742.65,
+    viewHighRamanCm1: 8226.22,
+    viewHighAbsCm1: 11050.95,
+    viewLowAbsCm1: 10567.38,
+    viewSpanCm1: 483.57,
+  },
+];
+
+export interface TurretKinematicsState {
+  centreNuCm1: number;
+  centreRamanCm1: number;
+  wavelengthNm: number;
+  turretAngleDeg: number;
+  turretAngleRad: number;
+  absoluteMotorSteps: number;
+  ccdWindowWidthCm1: number;
+  windowHighAbsCm1: number;
+  windowLowAbsCm1: number;
+  windowLowRamanCm1: number;
+  windowHighRamanCm1: number;
+  cm1PerSingleMotorStep: number;
+  cm1Per100MotorSteps: number;
+  degPer100MotorSteps: number;
+  filterTransmissionPct: number;
+}
+
+export interface CcdLineSaturationEntry {
+  line: NeonLine;
+  pixelCol: number;
+  countsPerSec: number;
+  countsAtRecommendedExposure: number;
+  saturatesAt1s: boolean;
+  saturationTimeSec: number;
+}
+
+export interface CcdExposureAnalysis {
+  recommendedExposureSec: number; // 0.5, 1, 5, or 10 seconds
+  maxSafeExposureSec: number; // Exposure where strongest line reaches 800,000 counts
+  hardSaturationExposureSec: number; // Exposure where strongest line hits 1,000,000 counts
+  limitingLine: NeonLine | null;
+  limitingLineCountsPerSec: number;
+  isLimitedByStrongPeak: boolean;
+  stepsToClearLimitingLine: number; // Motor steps needed for the saturating line to exit the CCD
+  cm1ToClearLimitingLine: number;
+  visibleEntries: CcdLineSaturationEntry[];
+  explanation: string;
+}
+
 export interface CalibrationParameters {
   spectrograph: SpectrographModel;
   laserNm: number; // Nominal laser wavelength in nm (e.g., 405, 457, 532, 633, 660, 785, 830)
@@ -70,11 +183,50 @@ export interface CalibrationSolution {
   // Selected calibration lines
   primaryCalibrationLine: NeonLine | null;
   secondaryCalibrationLine: NeonLine | null;
+  focusAnchorLines: NeonLine[]; // e.g., 18516.48 & 15619.12 cm^-1 for near/far lens focusing
   selectedLines: NeonLine[];
   candidatePool: NeonLine[];
   binDistribution: BinDistribution[];
   dispersionUniformityScore: number; // 0 - 100%
   confusionRisks: LineConfusionPair[];
+}
+
+/**
+ * Converts grating turret motor steps to degrees of rotation.
+ * 1316.0 steps = 1.00000 degree (100 steps = 0.07599°, 10,000 steps = 7.59878°).
+ */
+export function motorStepsToDegrees(steps: number): number {
+  return Number((steps / MOTOR_STEPS_PER_DEGREE).toFixed(5));
+}
+
+/**
+ * Converts grating turret degrees of rotation to motor steps.
+ */
+export function degreesToMotorSteps(degrees: number): number {
+  return Math.round(degrees * MOTOR_STEPS_PER_DEGREE);
+}
+
+/**
+ * Computes the optical filter transmission percentage as a function of Raman shift (cm^-1).
+ * From empirical reference (update.txt):
+ * - Below Rayleigh cut-off (~40 cm^-1, e.g. 18758.99 cm^-1 on 532nm): 0% (blocked by edge filter)
+ * - 50 to 5000 cm^-1 Raman shift: ~100% passband transmission
+ * - Starts dropping off at ~5000 cm^-1, reaching 65% at ~7500 cm^-1 and ~55% at 8000 cm^-1.
+ */
+export function calculateFilterTransmissionPct(ramanShiftCm1: number): number {
+  if (ramanShiftCm1 < 42) {
+    return 0;
+  }
+  if (ramanShiftCm1 <= 5000) {
+    return 100;
+  }
+  if (ramanShiftCm1 <= 7500) {
+    // Linearly drops from 100% at 5000 cm^-1 to 65% at 7500 cm^-1
+    const ratio = (ramanShiftCm1 - 5000) / 2500;
+    return Number((100 - ratio * 35).toFixed(1));
+  }
+  const extra = (ramanShiftCm1 - 7500) / 1000;
+  return Number(Math.max(25, 65 - extra * 18).toFixed(1));
 }
 
 /**
@@ -117,8 +269,9 @@ export function getLaserWavenumberCm1(laserNm: number): number {
 /**
  * Calculates the spectral window width (cm^-1) across the active CCD width (default 1014 px)
  * at a given wavenumber (cm^-1) and grating groove density (l/mm).
- * Derived from Czerny-Turner diffraction grating dispersion and calibrated against
- * factory scan margins for 600, 1200, 1800, and 2400 l/mm gratings.
+ * Derived from Czerny-Turner diffraction grating dispersion (F = 249.26 mm, Included angle = 0.5231 rad)
+ * and calibrated against empirical 1800 l/mm CCD view spans (2009 cm^-1 @ 0 cut-off,
+ * 1172 cm^-1 @ 4000 cut-off, 484 cm^-1 @ 8000 cut-off) and factory scan margins.
  */
 export function calculateCcdWindowWidthCm1(
   wavenumberCm1: number,
@@ -128,22 +281,247 @@ export function calculateCcdWindowWidthCm1(
 ): number {
   // Wavelength in nm
   const lambdaNm = 1e7 / Math.max(wavenumberCm1, 4000);
-  // Dimensionless diffraction parameter x = (g * lambda) / 1e6 = sin(alpha) + sin(beta)
-  const sinSum = (gratingLinesPerMm * lambdaNm) / 1e6;
-  // Cosine foreshortening factor as grating rotates to steeper angles
-  const cosBeta = Math.sqrt(Math.max(0.08, 1 - Math.pow(sinSum * 0.58, 2)));
+  // Half included angle gamma = 0.523113 / 2 = 0.261556 rad (14.985 deg), cos(gamma) = 0.96599
+  const halfIncludedRad = CALIBRATED_1800_INCLUDED_ANGLE_RAD / 2;
+  const sinTheta = Math.min(
+    0.985,
+    (gratingLinesPerMm * lambdaNm) / (2e6 * Math.cos(halfIncludedRad))
+  );
+  const thetaRad = Math.asin(Math.max(0.01, sinTheta));
+  // In the Czerny-Turner bench: incidence alpha = theta + gamma, camera diffraction beta = theta - gamma
+  const betaRad = thetaRad - halfIncludedRad;
+  const cosBeta = Math.max(0.08, Math.cos(betaRad));
+  // Small empirical WiRE X focal correction term across high diffraction angles
+  const focalCorrectionFactor = 1 + 0.042 * Math.sin(Math.max(0, betaRad));
 
-  // Focal length factor by spectrograph architecture (250mm nominal focal length)
+  // Focal length factor by spectrograph architecture (calibrated 249.2607 mm focal length)
   const focalScale =
     spectrograph === 'inVia' ? 1.0 : spectrograph === 'Virsa' ? 1.12 : 0.94;
 
-  // Linear dispersion d(lambda)/d(pixel) in nm/px for 250mm focal length, 26um pixel pitch
-  const dLambdaPerPxNm = (52.0 / gratingLinesPerMm) * cosBeta * focalScale;
+  // Linear dispersion d(lambda)/d(pixel) in nm/px across 1014 active pixels
+  const dLambdaPerPxNm =
+    (101.48 / gratingLinesPerMm) *
+    cosBeta *
+    focalCorrectionFactor *
+    focalScale;
   const totalWindowNm = dLambdaPerPxNm * activeWidthPx;
 
   // Convert wavelength window (nm) to wavenumber window (cm^-1): |d(nu)| = (nu^2 / 1e7) * d(lambda)
   const windowCm1 = (Math.pow(wavenumberCm1, 2) / 1e7) * totalWindowNm;
   return Number(windowCm1.toFixed(1));
+}
+
+/**
+ * Computes the complete Czerny-Turner grating turret angle, absolute motor step position,
+ * CCD visible wavenumber & Raman shift bounds, and wavenumber shift per motor step.
+ * Validated against the empirical 532nm / 1800 l/mm calibration table in update.txt.
+ */
+export function calculateTurretKinematicsAtWavenumber(
+  centreNuCm1: number,
+  gratingLinesPerMm: number,
+  laserWavenumberCm1: number = 18797.0,
+  activeWidthPx: number = 1014,
+  spectrograph: SpectrographModel = 'inVia'
+): TurretKinematicsState {
+  const safeNu = Math.max(4000, centreNuCm1);
+  const wavelengthNm = 1e7 / safeNu;
+  const halfIncludedRad = CALIBRATED_1800_INCLUDED_ANGLE_RAD / 2;
+
+  // Czerny-Turner grating equation: lambda = (2 * sin(theta) * cos(gamma)) / g
+  const sinTheta = Math.min(
+    0.995,
+    Math.max(
+      0.01,
+      (gratingLinesPerMm * wavelengthNm) / (2e6 * Math.cos(halfIncludedRad))
+    )
+  );
+  const turretAngleRad = Math.asin(sinTheta);
+  const turretAngleDeg = (turretAngleRad * 180) / Math.PI;
+  const absoluteMotorSteps = degreesToMotorSteps(turretAngleDeg);
+
+  const ccdWindowWidthCm1 = calculateCcdWindowWidthCm1(
+    safeNu,
+    gratingLinesPerMm,
+    activeWidthPx,
+    spectrograph
+  );
+
+  const windowHighAbsCm1 = Number((safeNu + ccdWindowWidthCm1 / 2).toFixed(2));
+  const windowLowAbsCm1 = Number((safeNu - ccdWindowWidthCm1 / 2).toFixed(2));
+  const centreRamanCm1 = Number((laserWavenumberCm1 - safeNu).toFixed(2));
+  const windowLowRamanCm1 = Number(
+    (laserWavenumberCm1 - windowHighAbsCm1).toFixed(2)
+  );
+  const windowHighRamanCm1 = Number(
+    (laserWavenumberCm1 - windowLowAbsCm1).toFixed(2)
+  );
+
+  // Derivative |d(nu)/d(theta)| = nu * cot(theta) per radian
+  const cosTheta = Math.sqrt(Math.max(0.01, 1 - sinTheta * sinTheta));
+  const dNuPerRad = safeNu * (cosTheta / sinTheta);
+  const radPerStep = Math.PI / (180 * MOTOR_STEPS_PER_DEGREE);
+  const cm1PerSingleMotorStep = Number((dNuPerRad * radPerStep).toFixed(4));
+  const cm1Per100MotorSteps = Number((cm1PerSingleMotorStep * 100).toFixed(2));
+  const degPer100MotorSteps = motorStepsToDegrees(100);
+  const filterTransmissionPct = calculateFilterTransmissionPct(centreRamanCm1);
+
+  return {
+    centreNuCm1: Number(safeNu.toFixed(2)),
+    centreRamanCm1,
+    wavelengthNm: Number(wavelengthNm.toFixed(3)),
+    turretAngleDeg: Number(turretAngleDeg.toFixed(5)),
+    turretAngleRad: Number(turretAngleRad.toFixed(6)),
+    absoluteMotorSteps,
+    ccdWindowWidthCm1,
+    windowHighAbsCm1,
+    windowLowAbsCm1,
+    windowLowRamanCm1,
+    windowHighRamanCm1,
+    cm1PerSingleMotorStep,
+    cm1Per100MotorSteps,
+    degPer100MotorSteps,
+    filterTransmissionPct,
+  };
+}
+
+/**
+ * Evaluates CCD detector count rates, saturation risk (>1,000,000 counts),
+ * recommended scan exposure duration (0.5s, 1s, 5s, 10s), and how many motor steps
+ * are required to move saturating lines (such as 17086.75 or 14219.7 cm^-1) off the CCD
+ * before increasing exposure time for weak lines.
+ */
+export function evaluateCcdExposureAndSaturation(
+  windowHighCm1: number,
+  windowLowCm1: number,
+  gratingLinesPerMm: number,
+  laserWavenumberCm1: number = 18797.0,
+  activeWidthPx: number = 1014,
+  leftMarginPx: number = 13
+): CcdExposureAnalysis {
+  const span = Math.max(1, windowHighCm1 - windowLowCm1);
+  const centreNu = (windowHighCm1 + windowLowCm1) / 2;
+  const kinematics = calculateTurretKinematicsAtWavenumber(
+    centreNu,
+    gratingLinesPerMm,
+    laserWavenumberCm1,
+    activeWidthPx
+  );
+
+  // Grating efficiency scaling relative to 1800 l/mm reference
+  const gratingScale =
+    gratingLinesPerMm <= 600
+      ? 1.45
+      : gratingLinesPerMm <= 1200
+        ? 1.2
+        : gratingLinesPerMm <= 1800
+          ? 1.0
+          : 0.78;
+
+  const visibleCatalogLines = NEON_CATALOG.filter(
+    (l) => l.wavenumber <= windowHighCm1 && l.wavenumber >= windowLowCm1
+  );
+
+  const rawEntries = visibleCatalogLines.map((line) => {
+    const ratio = (windowHighCm1 - line.wavenumber) / span;
+    const pixelCol = Math.round(leftMarginPx + ratio * activeWidthPx);
+    const ramanShift = laserWavenumberCm1 - line.wavenumber;
+    const transFactor = calculateFilterTransmissionPct(ramanShift) / 100;
+
+    // Use exact empirical 1s count rate when available, or scale from relativeIntensity and wavenumber region
+    const regionalMaxCps = line.wavenumber < 13500 ? 75_000 : 280_000;
+    const baseCps =
+      line.countsAt1s1800 !== undefined
+        ? line.countsAt1s1800
+        : Math.round(
+            Math.pow(line.relativeIntensity / 1000, 2.4) * regionalMaxCps
+          );
+
+    const countsPerSec = Math.round(
+      baseCps * gratingScale * (line.countsAt1s1800 !== undefined ? 1 : transFactor)
+    );
+    const saturatesAt1s = countsPerSec >= CCD_SATURATION_LIMIT_COUNTS * 0.7;
+    const saturationTimeSec =
+      countsPerSec > 0
+        ? Number((CCD_SATURATION_LIMIT_COUNTS / countsPerSec).toFixed(2))
+        : 999;
+
+    return {
+      line,
+      pixelCol,
+      countsPerSec,
+      saturatesAt1s,
+      saturationTimeSec,
+    };
+  });
+
+  // Sort by highest countsPerSec to find the limiting line on the CCD
+  const sortedByCps = [...rawEntries].sort(
+    (a, b) => b.countsPerSec - a.countsPerSec
+  );
+  const topEntry = sortedByCps[0] || null;
+  const maxCps = topEntry ? topEntry.countsPerSec : 0;
+
+  // Choose standard WiRE X / .lns scan exposure duration (0.5s, 1s, 5s, 10s)
+  // keeping max counts safely below the 1,000,000 count saturation ceiling (target <= 650,000 counts)
+  let recommendedExposureSec = 10;
+  if (maxCps > 650_000) {
+    recommendedExposureSec = 0.5;
+  } else if (maxCps > 135_000) {
+    recommendedExposureSec = 1;
+  } else if (maxCps > 25_000) {
+    recommendedExposureSec = 5;
+  } else {
+    recommendedExposureSec = 10;
+  }
+
+  const maxSafeExposureSec =
+    maxCps > 0 ? Number((650_000 / maxCps).toFixed(2)) : 20;
+  const hardSaturationExposureSec =
+    maxCps > 0 ? Number((CCD_SATURATION_LIMIT_COUNTS / maxCps).toFixed(2)) : 20;
+
+  const visibleEntries: CcdLineSaturationEntry[] = rawEntries.map((e) => ({
+    ...e,
+    countsAtRecommendedExposure: Math.round(
+      e.countsPerSec * recommendedExposureSec
+    ),
+  }));
+
+  // Calculate how many motor steps are needed to push the limiting strong line off the CCD
+  // When scanning toward lower wavenumbers (higher Raman shift), lines exit the high-wavenumber edge (windowHighCm1).
+  // When scanning toward higher wavenumbers, lines exit the low-wavenumber edge (windowLowCm1).
+  let stepsToClearLimitingLine = 0;
+  let cm1ToClearLimitingLine = 0;
+  const isLimitedByStrongPeak = recommendedExposureSec <= 1 && maxCps > 135_000;
+
+  if (topEntry && isLimitedByStrongPeak) {
+    const distToHighEdge = Math.abs(windowHighCm1 - topEntry.line.wavenumber);
+    const distToLowEdge = Math.abs(topEntry.line.wavenumber - windowLowCm1);
+    cm1ToClearLimitingLine = Number(
+      (Math.min(distToHighEdge, distToLowEdge) + 15).toFixed(1)
+    );
+    stepsToClearLimitingLine = Math.ceil(
+      cm1ToClearLimitingLine / Math.max(0.05, kinematics.cm1PerSingleMotorStep)
+    );
+  }
+
+  const explanation = topEntry
+    ? isLimitedByStrongPeak
+      ? `Exposure capped at ${recommendedExposureSec}s because intense peak ${topEntry.line.wavenumber.toFixed(2)} cm⁻¹ (${topEntry.countsPerSec.toLocaleString()} counts/s) is on the CCD (saturates >1,000,000 counts at ${hardSaturationExposureSec}s). Move turret ≥ ${stepsToClearLimitingLine} motor steps (${cm1ToClearLimitingLine} cm⁻¹) to push ${topEntry.line.wavenumber.toFixed(2)} cm⁻¹ off the CCD before increasing scan duration.`
+      : `Max peak on CCD is ${topEntry.line.wavenumber.toFixed(2)} cm⁻¹ (${topEntry.countsPerSec.toLocaleString()} counts/s). Safe to run ${recommendedExposureSec}s scan (${Math.round(topEntry.countsPerSec * recommendedExposureSec).toLocaleString()} counts, well below 1,000,000 saturation limit).`
+    : 'No catalog Neon lines on active CCD window.';
+
+  return {
+    recommendedExposureSec,
+    maxSafeExposureSec,
+    hardSaturationExposureSec,
+    limitingLine: topEntry?.line || null,
+    limitingLineCountsPerSec: maxCps,
+    isLimitedByStrongPeak,
+    stepsToClearLimitingLine,
+    cm1ToClearLimitingLine,
+    visibleEntries,
+    explanation,
+  };
 }
 
 /**
@@ -218,8 +596,8 @@ export function calculateScanRangeBounds(
     spectrograph
   );
 
-  const upperMargin = winHigh * 0.85;
-  const lowerMargin = winLow * 0.72;
+  const upperMargin = winHigh * 0.55;
+  const lowerMargin = winLow * 0.52;
 
   return {
     scanHighCm1: Number((absHighCm1 + upperMargin).toFixed(1)),
@@ -229,10 +607,10 @@ export function calculateScanRangeBounds(
 
 /**
  * Evaluates line confusion / misidentification risk between adjacent lines.
- * Before calibration, only the PCL is manually zeroed; lines further from the PCL
- * can drift by ~1.8% to 3.2% of their distance |nu - nu_PCL|.
- * If the neighbor spacing is smaller than or comparable to this pre-calibration drift,
- * the software may lock onto the wrong neon line (e.g., 17484.88 detected as 17347.80).
+ * Covers both:
+ * 1) Close doublets on high-resolution gratings (e.g. 11388.5 vs 11384.5 cm^-1 [4.0 cm^-1],
+ *    10740.1 vs 10736.3 cm^-1 [3.8 cm^-1], 10762.2 vs 10751.4 cm^-1 [10.8 cm^-1] noted in 532nm_1800.lns).
+ * 2) Pre-calibration drift confusion on lower-density gratings (e.g. 17484.88 vs 17347.80 cm^-1 on 600 l/mm).
  */
 export function evaluateConfusionRisks(
   selectedLines: NeonLine[],
@@ -252,7 +630,7 @@ export function evaluateConfusionRisks(
         ? 0.022
         : gratingLinesPerMm <= 1500
           ? 0.018
-          : 0.015;
+          : 0.012;
   const baseToleranceCm1 =
     gratingLinesPerMm <= 600
       ? 138
@@ -260,7 +638,7 @@ export function evaluateConfusionRisks(
         ? 78
         : gratingLinesPerMm <= 1500
           ? 62
-          : 48;
+          : 28;
 
   for (let i = 0; i < sorted.length - 1; i++) {
     const line = sorted[i];
@@ -276,6 +654,24 @@ export function evaluateConfusionRisks(
     const spacing = Number(
       Math.abs(line.wavenumber - neighbor.wavenumber).toFixed(2)
     );
+
+    // Explicit close-doublet check (e.g., <= 12 cm^-1 on any grating, like 11388.5/11384.5 or 10740.1/10736.3 or 10762.2/10751.4)
+    if (spacing <= 12.0) {
+      const isVeryTight = spacing <= 6.0;
+      risks.push({
+        targetLine: line,
+        neighborLine: neighbor,
+        spacingCm1: spacing,
+        maxAllowedDriftCm1: maxExpectedDriftCm1,
+        riskLevel: isVeryTight ? 'critical' : 'caution',
+        explanation:
+          line.closeNeighborWarning ||
+          neighbor.closeNeighborWarning ||
+          `${line.wavenumber.toFixed(2)} cm⁻¹ is only ${spacing.toFixed(2)} cm⁻¹ from ${neighbor.wavenumber.toFixed(2)} cm⁻¹ — too close for reliable single-peak centroiding.`,
+      });
+      continue;
+    }
+
     if (spacing <= maxExpectedDriftCm1 * 1.12) {
       const isCritical = spacing <= maxExpectedDriftCm1 * 0.96;
       risks.push({
@@ -354,7 +750,7 @@ export function computeBinUniformity(
 
 /**
  * Main solver that calculates the complete spectrograph calibration specification,
- * optimal Neon line selection, PCL, 2nd calibration line, and motor step size.
+ * optimal Neon line selection, PCL, 2nd calibration line, lens focusing lines, and motor step size.
  */
 export function solveCalibration(
   params: CalibrationParameters
@@ -379,7 +775,7 @@ export function solveCalibration(
     ramanMin = 50;
     ramanMax = 8500;
     limitingFactors.push(
-      'RPL / PL Extended Photoluminescence Filter (50–8500 cm⁻¹ Raman shift)'
+      'RPL / PL Extended Filter (50–8500 cm⁻¹ Raman shift; signal rolls off above ~5000 cm⁻¹ to ~65% at 7500 cm⁻¹)'
     );
   } else {
     ramanMin = Math.max(0, params.customRamanMinCm1);
@@ -390,8 +786,6 @@ export function solveCalibration(
   }
 
   // 2. Check Grating Mechanical Diffraction Angle Limit
-  // Maximum practical diffraction wavelength lambda_max (nm) where g * lambda_max <= 1.82e6
-  // For 2400 l/mm grating: max wavelength is ~751.7 nm -> 13302.8 cm^-1 (which is 2500 cm^-1 Raman shift for 633nm!)
   if (params.gratingLinesPerMm >= 2400 && Math.abs(params.laserNm - 633) < 0.5) {
     if (ramanMax > 2500) {
       ramanMax = 2500;
@@ -414,7 +808,6 @@ export function solveCalibration(
   }
 
   // 3. Check Silicon CCD Long-Wavelength Detection Cutoff
-  // For 785nm laser with standard filter, CCD cutoff around ~9800 cm^-1 (practical tail to 9239 cm^-1 = 3500 cm^-1 Raman shift)
   if (params.enforceCcdCutoff) {
     const effectiveCcdLimitCm1 =
       Math.abs(params.laserNm - 785) < 0.5 && params.ccdDetectionCutoffCm1 >= 9239
@@ -469,16 +862,13 @@ export function solveCalibration(
   );
 
   // 7. Calculate Grating Turret Motor Step Size to achieve targetOccurrencesPerLine across the CCD
-  // In a turret spectrograph, 1 motor step corresponds to a fixed angular increment:
-  // At 600 l/mm, 1 motor step shifts the spectrum by ~3.1 cm^-1 at centre (so 50 steps = ~155 cm^-1, ~8 occurrences across ~1240 cm^-1 window)
   const targetHits = Math.max(2, params.targetOccurrencesPerLine);
   const requiredStepCm1 = ccdWindowCentreCm1 / targetHits;
   const cm1PerMotorTick = ccdWindowCentreCm1 / 400; // 400 motor ticks spans 1 full active CCD window
   const exactMotorStepTicks = Number(
     (requiredStepCm1 / cm1PerMotorTick).toFixed(1)
-  ); // Equals 400 / targetHits (e.g., 8 occurrences -> 50 motor steps; 4 occurrences -> 100 motor steps!)
+  );
 
-  // Snap to practical turret controller step increments (20, 25, 40, 50, 75, 100)
   const standardSteps = [20, 25, 40, 50, 60, 75, 80, 100, 125, 150];
   const recommendedMotorStepTicks = standardSteps.reduce((prev, curr) =>
     Math.abs(curr - exactMotorStepTicks) < Math.abs(prev - exactMotorStepTicks)
@@ -494,8 +884,7 @@ export function solveCalibration(
   );
   const totalScanSteps = Math.ceil(scanSpanCm1 / wavenumberShiftPerStepCm1);
 
-  // 8. Filter Candidate Neon Lines within Calibration Range (with edge anchor margin)
-  // BDA (Back-Illuminated) CCDs have ~2x higher quantum efficiency, allowing slightly lower intensity lines if needed
+  // 8. Filter Candidate Neon Lines within Calibration Range
   const effectiveMinIntensity =
     params.ccdType === 'BDA'
       ? Math.max(100, params.minRelativeIntensity * 0.8)
@@ -504,12 +893,31 @@ export function solveCalibration(
   const calMarginHigh = Math.min(scanHighCm1, absHighCm1 + 260);
   const calMarginLow = Math.max(scanLowCm1, absLowCm1 - 260);
 
-  const candidatePool = NEON_CATALOG.filter(
-    (line) =>
+  const candidatePool = NEON_CATALOG.filter((line) => {
+    if (line.excludeFromAutoPick) return false;
+    // On 532nm + 1800 l/mm with FDA camera, 18758.92 cm^-1 has 0 counts (blocked by 50 cm^-1 filter edge)
+    if (
+      Math.abs(params.laserNm - 532) < 0.5 &&
+      params.gratingLinesPerMm >= 1800 &&
+      params.ccdType === 'FDA' &&
+      Math.abs(line.wavenumber - 18758.92) < 1.0
+    ) {
+      return false;
+    }
+    return (
       line.wavenumber <= calMarginHigh &&
       line.wavenumber >= calMarginLow &&
       line.relativeIntensity >= effectiveMinIntensity
-  ).sort((a, b) => b.wavenumber - a.wavenumber);
+    );
+  }).sort((a, b) => b.wavenumber - a.wavenumber);
+
+  // Identify near/far lens focus anchor lines inside scan range (e.g., 18516.48 & 15619.12 for 532nm)
+  const focusAnchorLines = NEON_CATALOG.filter(
+    (l) =>
+      l.isFocusAnchor &&
+      l.wavenumber <= scanHighCm1 &&
+      l.wavenumber >= scanLowCm1
+  );
 
   // 9. Select Primary Calibration Line (PCL) near centre of calibration range
   let primaryCalibrationLine: NeonLine | null = null;
@@ -521,8 +929,6 @@ export function solveCalibration(
   }
 
   if (!primaryCalibrationLine) {
-    // Check well-known factory PCLs first:
-    // For 532nm (Abs 18747 - 14797, centre 16772): 17086.75 cm^-1 is the universal intense yellow Ne I PCL
     if (
       Math.abs(params.laserNm - 532) < 0.5 &&
       calMarginHigh >= 17086.75 &&
@@ -542,7 +948,6 @@ export function solveCalibration(
     }
 
     if (!primaryCalibrationLine && candidatePool.length > 0) {
-      // Score candidates near absCentreCm1 by proximity to centre + relative intensity + primary flag
       const span = Math.max(500, absHighCm1 - absLowCm1);
       primaryCalibrationLine = [...candidatePool].sort((a, b) => {
         const distScoreA = 1 - Math.abs(a.wavenumber - absCentreCm1) / (span * 0.6);
@@ -561,11 +966,10 @@ export function solveCalibration(
   }
 
   // 10. Select Equal-Dispersion Lines across the Calibration Range [absLowCm1, absHighCm1]
-  // Minimum wavenumber spacing depends on grating groove density:
-  // Lower groove density (600 l/mm) requires wider wavenumber spacing so lines don't overlap or get confused
+  // Note: 1800 l/mm grating provides narrow FWHM and good resolution, allowing closer spacing than 600 l/mm
   const minRequiredLineSpacingCm1 = Number(
     Math.max(
-      95,
+      85,
       params.gratingLinesPerMm <= 600
         ? 220
         : params.gratingLinesPerMm <= 1200
@@ -661,7 +1065,7 @@ export function solveCalibration(
 
   selectedLines.sort((a, b) => b.wavenumber - a.wavenumber);
 
-  // Identify 2nd Calibration Line (explicit 13353.03 for 633nm, or strong anchor in the lower third of range)
+  // Identify 2nd Calibration Line
   let secondaryCalibrationLine: NeonLine | null = null;
   if (Math.abs(params.laserNm - 633) < 0.5) {
     secondaryCalibrationLine =
@@ -675,7 +1079,6 @@ export function solveCalibration(
       null;
   }
   if (!secondaryCalibrationLine && selectedLines.length >= 2) {
-    // Pick strong line near the lower 20-30% of the calibration range
     const targetSecondNu = absLowCm1 + (absHighCm1 - absLowCm1) * 0.18;
     secondaryCalibrationLine =
       [...selectedLines]
@@ -722,6 +1125,7 @@ export function solveCalibration(
     totalScanSteps,
     primaryCalibrationLine,
     secondaryCalibrationLine,
+    focusAnchorLines,
     selectedLines,
     candidatePool,
     binDistribution,

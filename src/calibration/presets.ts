@@ -44,6 +44,20 @@ const params532_600: CalibrationParameters = {
   filterType: 'standard',
 };
 
+const params532_1800: CalibrationParameters = {
+  ...DEFAULT_BASE_PARAMS,
+  laserNm: 532,
+  gratingLinesPerMm: 1800,
+  filterType: 'standard',
+};
+
+const params532_1800_lns: CalibrationParameters = {
+  ...DEFAULT_BASE_PARAMS,
+  laserNm: 532,
+  gratingLinesPerMm: 1800,
+  filterType: 'rpl_pl',
+};
+
 const params785_600: CalibrationParameters = {
   ...DEFAULT_BASE_PARAMS,
   laserNm: 785,
@@ -132,6 +146,104 @@ MotorStep: 100
 16822.41             820         CAL
 `;
 
+const EMPIRICAL_532_1800_LNS_FILE = `10 Seconds
+18758.990\t0 (Not visible with 1800 grating, on FDA camera with visible lenses)
+18516.592\t76439
+18403.8\t\t383
+18343.06 0\t78
+18353.5\t\t170
+17976.668 \t1014
+17835.71 0\t183
+17678.280\t3707
+
+1 Second
+17484.887\t178
+17347.803\t2574
+17228.0\t\t453
+17181.85\t1524
+
+0.5 Seconds
+17086.750\t360086
+17001.3\t\t52340
+16821.327\t57789
+16734.7\t\t37735
+16583.756\t17933
+16462.700\t59327
+16403.761\t92605
+
+1 second
+16278.525\t371012
+16224.2\t\t107849
+16084.201\t259375
+15957.884\t227768
+15860.7\t\t47177
+15666.635\t324699
+15619.514\t468176
+15369.180\t210282
+15307.179\t119474
+15153.919\t155798
+14887.503\t312093
+14808.4\t\t2555
+14553.1\t\t1635\t
+
+0.5 seconds
+14430.9\t\t166693
+14219.7\t\t498421
+13939.1\t\t28885
+13802.1\t\t28853
+
+
+13542.7\t\t10849
+13442.7\t\t52860
+13353.0\t\t30592
+13326.3\t\t43857
+
+5 seconds
+13307.2\t\t202287
+13269.8\t\t290076
+13255.4\t\t191000
+13097.2\t\t442270
+12946.4\t\t108532
+12581.4\t\t150753
+12490.2\t\t60361
+12476.7\t\t120892
+12339.8\t\t148421
+12322.2\t\t625959\t
+11936.4\t\t632699
+11869.8\t\t140343
+11771.0\t\t416560
+11734.9\t\t110622
+11639.5\t\t64323
+11581.2\t\t164995
+11388.5\t\t183347 \t(Too close to 11384.5)
+11384.5\t\t50211\t(Too close to 11388.5)
+11294.3\t\t81358
+11279.2\t\t52118
+11211.2\t\t23465
+11125.0\t\t5773
+11018.6\t\t922
+10961.1\t\t251882
+10930.3\t\t18742
+10875.7\t\t2495
+10867.3\t\t14349
+
+
+10 seconds
+10780.7\t\t2854
+10762.2\t\t3398 (Quite close to 10751.4 but much lower intensity)
+10751.4\t\t23126
+10740.1\t\t3806 (Too close to other peak at 10736.3)
+10736.3\t\t8380 (Too close to other peak at 10740.1)
+10721.8\t\t20000
+10690.1\t\t4769
+10668.4\t\t6448
+10609.5\t\t15907
+10571.6\t\t6919
+10540.9\t\t5971
+10488.5\t\t19493
+10474.0\t\t9196
+`;
+
 export const FACTORY_PRESETS: FactoryPreset[] = [
   {
     id: '532-600-flawed-audit',
@@ -143,6 +255,27 @@ export const FACTORY_PRESETS: FactoryPreset[] = [
     sampleFileName: '532nm_600lmm_unverified_draft.cal',
     sampleFileContent: FLAWED_532_600_FILE,
     isFlawedDemo: true,
+  },
+  {
+    id: '532-1800-lns-empirical',
+    label: '532 nm · 1800 l/mm — Empirical Multi-Exposure .LNS (532nm_1800.lns)',
+    shortTag: '532nm / 1800 (.LNS Empirical)',
+    description:
+      'Full empirical 80-line 532nm 1800 l/mm scan across 0.5s, 1s, 5s, and 10s exposure zones. Highlights saturation limits from 17086.75 & 14219.7 cm⁻¹, lens focus anchors (18516.592 & 15619.514), and close doublets (11388.5/11384.5 & 10740.1/10736.3).',
+    params: params532_1800_lns,
+    sampleFileName: '532nm_1800.lns',
+    sampleFileContent: EMPIRICAL_532_1800_LNS_FILE,
+    isFlawedDemo: true,
+  },
+  {
+    id: '532-1800-std',
+    label: '532 nm · 1800 l/mm — Standard Filter (50–4000 cm⁻¹ / WiRE X Reference)',
+    shortTag: '532nm / 1800 l/mm',
+    description:
+      'inVia 532 nm + 1800 l/mm grating (F = 249.2607 mm, Included angle = 0.523113 rad, 1316 steps/deg). Focused on 18516.592 & 15619.514 cm⁻¹, PCL 17086.75 cm⁻¹.',
+    params: params532_1800,
+    sampleFileName: '532nm_1800lmm_validated.cal',
+    sampleFileContent: makePresetFile(params532_1800),
   },
   {
     id: '532-600-std',

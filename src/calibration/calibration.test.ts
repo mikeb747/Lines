@@ -2,8 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyCcdArchitecture,
+  calculateCcdWindowWidthCm1,
+  calculateFilterTransmissionPct,
   CalibrationParameters,
+  evaluateCcdExposureAndSaturation,
   getLaserWavenumberCm1,
+  motorStepsToDegrees,
   solveCalibration,
 } from './physicsEngine';
 import {
@@ -122,7 +126,9 @@ test('Target CCD occurrences accurately scales turret motor step size (8 hits ->
 });
 
 test('File auditor flags confusion risk (17484.88 vs 17347.80), clustering, and 100-step motor mismatch on flawed demo file, and passes on repaired file', () => {
-  const flawedPreset = FACTORY_PRESETS[0];
+  const flawedPreset = FACTORY_PRESETS.find(
+    (p) => p.id === '532-600-flawed-audit'
+  )!;
   const auditFlawed = auditCalibrationFile(
     flawedPreset.sampleFileName,
     flawedPreset.sampleFileContent,
@@ -192,4 +198,60 @@ test('405nm and 457nm lasers and 1500 l/mm grating produce uniform 5-zone calibr
   assert.ok(sol405_2400.selectedLines.length >= 8);
   assert.ok(sol405_2400.dispersionUniformityScore >= 85);
 });
+
+test('Empirical 1800 l/mm grating motor steps, degrees, CCD view compression, and exposure saturation match reference data', () => {
+  // 1316.0 steps/deg -> 100 steps = 0.07599°, 1000 steps = 0.75988°, 10000 steps = 7.59878°
+  assert.equal(motorStepsToDegrees(100), 0.07599);
+  assert.equal(motorStepsToDegrees(1000), 0.75988);
+  assert.equal(motorStepsToDegrees(10000), 7.59878);
+  assert.equal(motorStepsToDegrees(36788), 27.95441);
+  assert.equal(motorStepsToDegrees(53744), 40.83891);
+  assert.equal(motorStepsToDegrees(81385), 61.84271);
+
+  // Filter roll-off: 100% at 4000 cm-1, 65% at 7500 cm-1
+  assert.equal(calculateFilterTransmissionPct(4000), 100);
+  assert.equal(calculateFilterTransmissionPct(7500), 65);
+
+  // CCD window width compresses from ~2009 cm-1 (at 18870 cm-1 / 0 cut-off) to ~1172 cm-1 (at 14833 cm-1 / 4000 cut-off) to ~484 cm-1 (at 10809 cm-1 / 8000 cut-off)
+  const win0 = calculateCcdWindowWidthCm1(18870, 1800, 1014, 'inVia');
+  const win4000 = calculateCcdWindowWidthCm1(14833, 1800, 1014, 'inVia');
+  const win8000 = calculateCcdWindowWidthCm1(10809, 1800, 1014, 'inVia');
+  assert.ok(Math.abs(win0 - 2009.3) < 25, `win0=${win0}`);
+  assert.ok(Math.abs(win4000 - 1172.1) < 25, `win4000=${win4000}`);
+  assert.ok(Math.abs(win8000 - 483.6) < 25, `win8000=${win8000}`);
+
+  // Exposure saturation guard: when 17086.75 or 14219.12 is on the CCD, exposure is capped at 0.5s
+  const expAtPcl = evaluateCcdExposureAndSaturation(17800, 16300, 1800);
+  assert.equal(expAtPcl.recommendedExposureSec, 0.5);
+  assert.equal(expAtPcl.limitingLine?.wavenumber, 17086.75);
+  assert.ok(expAtPcl.stepsToClearLimitingLine > 0);
+
+  const expAt14219 = evaluateCcdExposureAndSaturation(14450, 13320, 1800);
+  assert.equal(expAt14219.recommendedExposureSec, 0.5);
+  assert.equal(expAt14219.limitingLine?.wavenumber, 14219.12);
+
+  // Once turret steps below 14219.12 (e.g. 13310 - 12400 cm-1), exposure increases to 5s
+  const expBelow14219 = evaluateCcdExposureAndSaturation(13310, 12400, 1800);
+  assert.equal(expBelow14219.recommendedExposureSec, 5);
+
+  // Audit the empirical 532nm_1800.lns preset
+  const lnsPreset = FACTORY_PRESETS.find(
+    (p) => p.id === '532-1800-lns-empirical'
+  )!;
+  const auditLns = auditCalibrationFile(
+    lnsPreset.sampleFileName,
+    lnsPreset.sampleFileContent,
+    lnsPreset.params
+  );
+  assert.equal(auditLns.parsedLines.length, 80);
+  assert.deepEqual(auditLns.detectedHeaders.exposureSectionsSec, [
+    10, 1, 0.5, 5,
+  ]);
+  // Verify close doublets (11388.5/11384.5 and 10740.1/10736.3) are flagged
+  assert.ok(
+    auditLns.uploadedConfusionRisks.some((r) => r.spacingCm1 <= 5.0),
+    'Should flag 4.0 cm-1 and 3.8 cm-1 doublets in 532nm_1800.lns'
+  );
+});
+
 

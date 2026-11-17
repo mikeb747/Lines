@@ -23,7 +23,8 @@ type WorkspaceTab = 'checker' | 'picker' | 'simulator' | 'matrix';
 
 export default function App() {
   // Default to the validated 532nm / 600 l/mm preset on startup
-  const initialPreset = FACTORY_PRESETS[1];
+  const initialPreset =
+    FACTORY_PRESETS.find((p) => p.id === '532-600-std') || FACTORY_PRESETS[0];
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('checker');
   const [activePresetId, setActivePresetId] = useState<string>(
     initialPreset.id
@@ -63,7 +64,8 @@ export default function App() {
   };
 
   const handleResetDefaults = () => {
-    const def = FACTORY_PRESETS[1];
+    const def =
+      FACTORY_PRESETS.find((p) => p.id === '532-600-std') || FACTORY_PRESETS[0];
     handleSelectPreset(def);
   };
 
@@ -79,9 +81,21 @@ export default function App() {
   };
 
   const handleLoadFlawedDemo = () => {
-    const flawed = FACTORY_PRESETS[0];
+    const flawed =
+      FACTORY_PRESETS.find((p) => p.id === '532-600-flawed-audit') ||
+      FACTORY_PRESETS[0];
     handleSelectPreset(flawed);
     setActiveTab('checker');
+  };
+
+  const handleLoadEmpirical1800Lns = () => {
+    const emp = FACTORY_PRESETS.find(
+      (p) => p.id === '532-1800-lns-empirical'
+    );
+    if (emp) {
+      handleSelectPreset(emp);
+      setActiveTab('checker');
+    }
   };
 
   const triggerDownload = (name: string, content: string, mime: string) => {
@@ -350,6 +364,7 @@ export default function App() {
               }}
               onAutoRepairFile={handleAutoRepairFile}
               onLoadFlawedDemo={handleLoadFlawedDemo}
+              onLoadEmpirical1800Lns={handleLoadEmpirical1800Lns}
               onExportCalFile={handleExportCalFile}
             />
           )}

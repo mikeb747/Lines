@@ -18,6 +18,7 @@ interface FileCheckerViewProps {
   onUpdateFileContent: (fileName: string, content: string) => void;
   onAutoRepairFile: () => void;
   onLoadFlawedDemo: () => void;
+  onLoadEmpirical1800Lns?: () => void;
   onExportCalFile: () => void;
 }
 
@@ -26,6 +27,7 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
   onUpdateFileContent,
   onAutoRepairFile,
   onLoadFlawedDemo,
+  onLoadEmpirical1800Lns,
   onExportCalFile,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -112,7 +114,7 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.cal,.csv,.dat,.cfg"
+            accept=".txt,.cal,.lns,.csv,.dat,.cfg"
             onChange={handleFileUpload}
             className="hidden"
             aria-label="Upload Calibration Text File"
@@ -139,7 +141,7 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
 
       {/* 6-Point Engineering Audit Grid */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 p-5 border-b border-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-b border-slate-200">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">
               6-Point Optical Calibration Verification Checks
@@ -149,13 +151,24 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
               drift, unweighted dispersion uniformity, and CCD step occurrences
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onLoadFlawedDemo}
-            className="text-xs font-medium text-cyan-700 hover:text-cyan-900 underline underline-offset-2 whitespace-nowrap"
-          >
-            Load 532nm Flawed Draft (17484.88 vs 17347.80 Confusion Demo)
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {onLoadEmpirical1800Lns && (
+              <button
+                type="button"
+                onClick={onLoadEmpirical1800Lns}
+                className="text-xs font-medium text-amber-800 hover:text-amber-950 underline underline-offset-2 whitespace-nowrap"
+              >
+                Load Empirical 532nm 1800 .LNS (Multi-Exposure & Close Doublets)
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onLoadFlawedDemo}
+              className="text-xs font-medium text-cyan-700 hover:text-cyan-900 underline underline-offset-2 whitespace-nowrap"
+            >
+              Load 532nm Flawed Draft (17484.88 vs 17347.80 Confusion Demo)
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
@@ -297,7 +310,8 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
                   <th className="py-2 px-3 text-right">NIST Ref (cm⁻¹)</th>
                   <th className="py-2 px-3 text-right">Δ (cm⁻¹)</th>
                   <th className="py-2 px-3 text-right">Air λ (nm)</th>
-                  <th className="py-2 px-3 text-right">Intensity</th>
+                  <th className="py-2 px-3 text-right">Counts / Int.</th>
+                  <th className="py-2 px-3 text-right">Scan Exp.</th>
                   <th className="py-2 px-3">Role</th>
                   <th className="py-2 pl-3">Audit Status & Notes</th>
                 </tr>
@@ -306,7 +320,7 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
                 {parsedLines.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="py-8 text-center font-sans text-xs text-slate-500"
                     >
                       No valid Neon wavenumber lines found in file. Click
@@ -328,6 +342,10 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
                         : row.status === 'warning'
                           ? 'text-amber-700'
                           : 'text-rose-700';
+
+                    const countVal =
+                      row.declaredIntensity ??
+                      row.matchedCatalogLine?.relativeIntensity;
 
                     return (
                       <tr
@@ -357,9 +375,14 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
                             : (1e7 / row.wavenumberCm1).toFixed(3)}
                         </td>
                         <td className="py-2 px-3 text-right text-slate-700">
-                          {row.declaredIntensity ??
-                            row.matchedCatalogLine?.relativeIntensity ??
-                            '—'}
+                          {countVal !== undefined
+                            ? countVal.toLocaleString()
+                            : '—'}
+                        </td>
+                        <td className="py-2 px-3 text-right text-cyan-800">
+                          {row.declaredExposureSec
+                            ? `${row.declaredExposureSec}s`
+                            : '—'}
                         </td>
                         <td className="py-2 px-3 font-semibold text-slate-700">
                           {row.declaredRole}

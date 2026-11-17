@@ -17,6 +17,9 @@ export interface ParsedLineEntry {
   catalogDeltaCm1: number | null;
   declaredRole?: 'PCL' | '2ND' | 'STANDARD';
   declaredIntensity?: number;
+  declaredExposureSec?: number;
+  estimatedCountsPerSec?: number;
+  inlineNote?: string;
   inScanRange: boolean;
   inAbsRamanRange: boolean;
   occurrencesAcrossCcd: number;
@@ -55,6 +58,7 @@ export interface FileAuditReport {
     scanLowCm1?: number;
     motorStepTicks?: number;
     ccdType?: string;
+    exposureSectionsSec?: number[];
   };
   parsedLines: ParsedLineEntry[];
   matchedLines: NeonLine[];
@@ -71,7 +75,7 @@ export interface FileAuditReport {
 }
 
 /**
- * Parses an uploaded or pasted calibration text file (.txt, .cal, .csv, .dat, .cfg)
+ * Parses an uploaded or pasted calibration text file (.txt, .cal, .lns, .csv, .dat, .cfg)
  * and audits it against the active CalibrationParameters and calculated CalibrationSolution.
  */
 export function auditCalibrationFile(
@@ -82,12 +86,30 @@ export function auditCalibrationFile(
   const solution = solveCalibration(params);
   const lines = rawContent.split(/\r?\n/);
 
-  const detectedHeaders: FileAuditReport['detectedHeaders'] = {};
+  const detectedHeaders: FileAuditReport['detectedHeaders'] = {
+    exposureSectionsSec: [],
+  };
   const parsedLines: ParsedLineEntry[] = [];
+  let activeExposureSec: number | undefined = undefined;
 
   for (let idx = 0; idx < lines.length; idx++) {
     const raw = lines[idx].trim();
     if (!raw) continue;
+
+    // Check for multi-exposure section headers in .lns files: e.g. "10 Seconds", "1 Second", "0.5 Seconds", "5 seconds"
+    const exposureHeaderMatch = raw.match(
+      /^(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i
+    );
+    if (exposureHeaderMatch && !/^\d{4,5}/.test(raw)) {
+      activeExposureSec = parseFloat(exposureHeaderMatch[1]);
+      if (
+        activeExposureSec > 0 &&
+        !detectedHeaders.exposureSectionsSec?.includes(activeExposureSec)
+      ) {
+        detectedHeaders.exposureSectionsSec?.push(activeExposureSec);
+      }
+      continue;
+    }
 
     // Check for metadata / header lines (e.g., "# Laser: 532nm", "Grating = 600 l/mm", "PCL: 17086.75", "MotorStep: 50")
     const lower = raw.toLowerCase();
@@ -150,7 +172,6 @@ export function auditCalibrationFile(
     );
     if (pclHeaderMatch) {
       detectedHeaders.pclCm1 = parseFloat(pclHeaderMatch[1]);
-      // Don't continue if this line is ONLY a header; we also allow PCL inline tags on peak rows
       if (!raw.includes(',') && !raw.includes('\t')) {
         continue;
       }
@@ -173,16 +194,19 @@ export function auditCalibrationFile(
       raw.startsWith(';') ||
       /^[a-zA-Z]/.test(raw)
     ) {
-      // Check if a comment line explicitly defines motor step or PCL
       continue;
     }
 
-    // Parse numerical wavenumber row: e.g. "17086.75, 1000, PCL" or "17484.88  490  # Ne I"
+    // Parse numerical wavenumber row: e.g. "17086.75, 1000, PCL" or "18343.06 0   78" or "11388.5   183347 (Too close to 11384.5)"
     const numMatch = raw.match(/^(\d{4,5}(?:\.\d+)?)/);
     if (!numMatch) continue;
 
     const wavenumberCm1 = parseFloat(numMatch[1]);
-    if (wavenumberCm1 < 4000 || wavenumberCm1 > 25000) continue;
+    if (wavenumberCm1 < 4000 || wavenumberCm1 > 26000) continue;
+
+    // Extract optional parenthetical note e.g. "(Too close to 11384.5)"
+    const parenMatch = raw.match(/\(([^)]+)\)/);
+    const inlineNote = parenMatch ? parenMatch[1].trim() : undefined;
 
     let declaredRole: 'PCL' | '2ND' | 'STANDARD' = 'STANDARD';
     if (/\b(?:pcl|primary)\b/i.test(raw)) {
@@ -194,13 +218,22 @@ export function auditCalibrationFile(
         detectedHeaders.secondCalLineCm1 = wavenumberCm1;
     }
 
-    // Optional second column for intensity
-    const tokens = raw.split(/[\s,;|\t]+/);
+    // Parse intensity or raw detector counts (supporting both 0-1000 normalized intensity and 0-2,000,000 raw detector counts)
+    const cleanWithoutParen = raw.replace(/\([^)]*\)/g, '').replace(/#.*$/, '');
+    const tokens = cleanWithoutParen.trim().split(/[\s,;|\t]+/);
     let declaredIntensity: number | undefined;
     if (tokens.length >= 2) {
-      const maybeInt = parseFloat(tokens[1]);
-      if (!isNaN(maybeInt) && maybeInt >= 1 && maybeInt <= 5000) {
-        declaredIntensity = maybeInt;
+      // Handle cases like "18343.06 0\t78" where a stray '0' digit after space precedes the tab-delimited count
+      const secondToken = parseFloat(tokens[1]);
+      const thirdToken = tokens.length >= 3 ? parseFloat(tokens[2]) : NaN;
+      if (
+        tokens[1] === '0' &&
+        !isNaN(thirdToken) &&
+        thirdToken > 0
+      ) {
+        declaredIntensity = thirdToken;
+      } else if (!isNaN(secondToken) && secondToken >= 0 && secondToken <= 5_000_000) {
+        declaredIntensity = secondToken;
       }
     }
 
@@ -235,6 +268,13 @@ export function auditCalibrationFile(
       (solution.ccdWindowCentreCm1 / Math.max(1, stepShiftCm1)).toFixed(1)
     );
 
+    const effectiveExposureSec =
+      activeExposureSec ?? matchedCatalogLine?.empiricalScanSec1800;
+    const estimatedCountsPerSec =
+      declaredIntensity !== undefined && effectiveExposureSec
+        ? Math.round(declaredIntensity / effectiveExposureSec)
+        : matchedCatalogLine?.countsAt1s1800;
+
     const issueMessages: string[] = [];
     let status: 'valid' | 'warning' | 'error' = 'valid';
 
@@ -243,26 +283,65 @@ export function auditCalibrationFile(
       issueMessages.push(
         `No known Neon I emission line within ±3.5 cm⁻¹ (closest is ${closestCat?.wavenumber.toFixed(2)} cm⁻¹, Δ=${catalogDeltaCm1} cm⁻¹).`
       );
-    } else if (Math.abs(catalogDeltaCm1 || 0) > 0.6) {
+    } else if (Math.abs(catalogDeltaCm1 || 0) > 1.2) {
       status = 'warning';
       issueMessages.push(
         `Wavenumber deviates by ${catalogDeltaCm1} cm⁻¹ from NIST reference (${matchedCatalogLine.wavenumber.toFixed(2)} cm⁻¹).`
       );
     }
 
-    if (!inScanRange) {
-      status = 'error';
+    // Check for 0-count / unobservable Rayleigh filter blocked line (e.g. 18758.990 with 0 counts on 1800 grating)
+    if (
+      declaredIntensity === 0 ||
+      (inlineNote && /not visible/i.test(inlineNote))
+    ) {
+      status = 'warning';
       issueMessages.push(
-        `Outside calculated Grating Scan Range (${solution.scanHighCm1.toFixed(1)} – ${solution.scanLowCm1.toFixed(1)} cm⁻¹).`
+        inlineNote ||
+          matchedCatalogLine?.closeNeighborWarning ||
+          `0 counts recorded — blocked by Rayleigh edge filter / visible lens cut-off on ${params.gratingLinesPerMm} l/mm.`
       );
     }
 
-    const effectiveIntensity =
-      declaredIntensity ?? matchedCatalogLine?.relativeIntensity ?? 0;
-    if (effectiveIntensity > 0 && effectiveIntensity < params.minRelativeIntensity) {
+    // Check for explicit close-neighbor annotations from .lns or catalog
+    if (inlineNote && /too close|quite close/i.test(inlineNote)) {
       if (status !== 'error') status = 'warning';
       issueMessages.push(
-        `Low relative intensity (${effectiveIntensity}) below threshold (${params.minRelativeIntensity}) for ${params.gratingLinesPerMm} l/mm grating.`
+        matchedCatalogLine?.closeNeighborWarning || inlineNote
+      );
+    } else if (matchedCatalogLine?.closeNeighborWarning && declaredIntensity !== 0) {
+      // Only warn if the neighbor is also present in the file or if it's a known unobservable line
+      if (/0 counts/i.test(matchedCatalogLine.closeNeighborWarning) && params.gratingLinesPerMm >= 1800) {
+        if (status !== 'error') status = 'warning';
+        issueMessages.push(matchedCatalogLine.closeNeighborWarning);
+      }
+    }
+
+    // Check if raw counts at the declared exposure exceed 1,000,000 CCD saturation limit
+    if (declaredIntensity !== undefined && declaredIntensity >= 1_000_000) {
+      status = 'error';
+      issueMessages.push(
+        `Detector saturation (${declaredIntensity.toLocaleString()} counts ≥ 1,000,000 ceiling) — reduce scan duration!`
+      );
+    }
+
+    if (!inScanRange) {
+      if (status !== 'error') status = 'warning';
+      issueMessages.push(
+        `Outside active ${solution.effectiveRamanMinCm1}–${solution.effectiveRamanMaxCm1} cm⁻¹ Grating Scan Range (${solution.scanHighCm1.toFixed(1)} – ${solution.scanLowCm1.toFixed(1)} cm⁻¹); requires extended RPL/PL scan.`
+      );
+    }
+
+    // Only apply normalized 1-1000 relativeIntensity threshold when not parsing raw multi-second .lns counts
+    if (
+      activeExposureSec === undefined &&
+      declaredIntensity !== undefined &&
+      declaredIntensity > 0 &&
+      declaredIntensity < params.minRelativeIntensity
+    ) {
+      if (status !== 'error') status = 'warning';
+      issueMessages.push(
+        `Low relative intensity (${declaredIntensity}) below threshold (${params.minRelativeIntensity}) for ${params.gratingLinesPerMm} l/mm grating.`
       );
     }
 
@@ -274,6 +353,9 @@ export function auditCalibrationFile(
       catalogDeltaCm1,
       declaredRole,
       declaredIntensity,
+      declaredExposureSec: effectiveExposureSec,
+      estimatedCountsPerSec,
+      inlineNote,
       inScanRange,
       inAbsRamanRange,
       occurrencesAcrossCcd,
