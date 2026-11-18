@@ -28,6 +28,17 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   onSelectPreset,
   onResetDefaults,
 }) => {
+  const [laserInputText, setLaserInputText] = React.useState<string>(
+    String(params.laserNm)
+  );
+
+  React.useEffect(() => {
+    const parsedCurrent = parseFloat(laserInputText);
+    if (isNaN(parsedCurrent) || Math.abs(parsedCurrent - params.laserNm) > 1e-6) {
+      setLaserInputText(String(params.laserNm));
+    }
+  }, [params.laserNm]);
+
   const update = <K extends keyof CalibrationParameters>(
     key: K,
     value: CalibrationParameters[K]
@@ -119,7 +130,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               Laser Wavelength (nm)
             </label>
             <span className="font-mono text-xs text-slate-500 tabular-nums">
-              {(1e7 / params.laserNm).toFixed(1)} cm⁻¹
+              {params.laserNm > 0 ? (1e7 / params.laserNm).toFixed(1) : '—'} cm⁻¹
             </span>
           </div>
           <div className="grid grid-cols-7 gap-1 mb-2">
@@ -127,7 +138,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               <button
                 key={nm}
                 type="button"
-                onClick={() => update('laserNm', nm)}
+                onClick={() => {
+                  setLaserInputText(String(nm));
+                  update('laserNm', nm);
+                }}
                 className={`rounded-md border py-1 text-xs font-mono font-medium transition-colors whitespace-nowrap ${
                   Math.abs(params.laserNm - nm) < 0.5
                     ? 'border-cyan-600 bg-cyan-50 text-cyan-900'
@@ -140,15 +154,22 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
           </div>
           <input
             id="laser-nm-input"
-            type="number"
-            min={325}
-            max={1064}
-            step={0.1}
-            value={params.laserNm}
+            type="text"
+            inputMode="decimal"
+            placeholder="Enter any laser wavelength (nm)..."
+            value={laserInputText}
             onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              if (!isNaN(val) && val > 200 && val < 2000) {
+              const raw = e.target.value;
+              setLaserInputText(raw);
+              const val = parseFloat(raw);
+              if (!isNaN(val) && val > 0) {
                 update('laserNm', val);
+              }
+            }}
+            onBlur={() => {
+              const val = parseFloat(laserInputText);
+              if (isNaN(val) || val <= 0) {
+                setLaserInputText(String(params.laserNm));
               }
             }}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-900 tabular-nums focus:border-cyan-600 focus:outline-none"

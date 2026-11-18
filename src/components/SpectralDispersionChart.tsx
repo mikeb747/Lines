@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
 import { CalibrationSolution } from '../calibration/physicsEngine';
 import { ParsedLineEntry } from '../calibration/fileAuditor';
-import { NeonLine } from '../calibration/neonCatalog';
+import { NEON_CATALOG, NeonLine } from '../calibration/neonCatalog';
+import { MapPin, X } from 'lucide-react';
 
 interface SpectralDispersionChartProps {
   solution: CalibrationSolution;
   uploadedLines?: ParsedLineEntry[];
   showUploadedComparison?: boolean;
   onSelectPcl?: (line: NeonLine) => void;
+}
+
+interface PinnedWavenumberPoint {
+  id: string;
+  wavenumberCm1: number;
+  ramanShiftCm1: number;
+  wavelengthNm: number;
+  nearestLine: NeonLine | null;
+  nearestDeltaCm1: number | null;
+  label?: string;
 }
 
 export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = ({
@@ -23,14 +34,17 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
     source: string;
   } | null>(null);
 
+  const [pinnedPoints, setPinnedPoints] = useState<PinnedWavenumberPoint[]>([]);
+
   const {
+    laserWavenumberCm1,
     scanHighCm1,
     scanLowCm1,
     absHighCm1,
     absLowCm1,
     absCentreCm1,
     primaryCalibrationLine,
-    secondaryCalibrationLine,
+    focusAnchorLines,
     selectedLines,
     binDistribution,
   } = solution;
@@ -45,6 +59,53 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
     return Math.max(40, Math.min(860, 48 + ratio * 804));
   };
 
+  // Inverse mapping from SVG X coordinate [48..852] to Wavenumber (cm^-1)
+  const fromX = (svgX: number) => {
+    const clampedX = Math.max(48, Math.min(852, svgX));
+    const ratio = (clampedX - 48) / 804;
+    return Number((padHigh - ratio * totalSpan).toFixed(2));
+  };
+
+  const pinWavenumber = (nuCm1: number, customLabel?: string) => {
+    const roundedNu = Number(nuCm1.toFixed(2));
+    const ramanShiftCm1 = Number((laserWavenumberCm1 - roundedNu).toFixed(2));
+    const wavelengthNm = Number((1e7 / Math.max(100, roundedNu)).toFixed(3));
+
+    // Find closest NIST Neon line for context
+    let nearestLine: NeonLine | null = null;
+    let minDiff = Infinity;
+    for (const cand of NEON_CATALOG) {
+      const diff = Math.abs(cand.wavenumber - roundedNu);
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearestLine = cand;
+      }
+    }
+
+    const newPin: PinnedWavenumberPoint = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      wavenumberCm1: roundedNu,
+      ramanShiftCm1,
+      wavelengthNm,
+      nearestLine,
+      nearestDeltaCm1: nearestLine
+        ? Number((roundedNu - nearestLine.wavenumber).toFixed(2))
+        : null,
+      label: customLabel,
+    };
+
+    setPinnedPoints((prev) => [...prev.slice(-5), newPin]);
+  };
+
+  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const svgX = ((e.clientX - rect.left) / rect.width) * 900;
+    if (svgX < 40 || svgX > 860) return;
+    const clickedNu = fromX(svgX);
+    pinWavenumber(clickedNu);
+  };
+
   const scanLeftX = toX(scanHighCm1);
   const scanRightX = toX(scanLowCm1);
   const absLeftX = toX(absHighCm1);
@@ -56,10 +117,14 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
-            Spectral Dispersion & Equal-Bin Calibration Map
+            Spectral Dispersion &amp; Equal-Bin Calibration Map
           </h3>
           <p className="text-xs text-slate-500">
-            Stokes direction: High Absolute Wavenumber (left) → Low Absolute Wavenumber (right) · 5 Equal Dispersion Zones
+            Stokes direction: High Absolute Wavenumber (left) → Low Absolute
+            Wavenumber (right) ·{' '}
+            <strong className="text-slate-700">
+              Click any point on the map to pin a wavenumber readout box
+            </strong>
           </p>
         </div>
 
@@ -68,6 +133,14 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
             <span className="h-2.5 w-2.5 rounded-xs bg-amber-500" />
             PCL ({primaryCalibrationLine?.wavenumber.toFixed(2) ?? '—'} cm⁻¹)
           </span>
+          {focusAnchorLines.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-xs bg-indigo-600" />
+              inVia Lens Focus (
+              {focusAnchorLines.map((f) => f.wavenumber.toFixed(1)).join(' & ')}{' '}
+              cm⁻¹)
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-xs bg-cyan-600" />
             Optimal Picked ({selectedLines.length})
@@ -78,15 +151,25 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
               Uploaded File ({uploadedLines.length})
             </span>
           )}
+          {pinnedPoints.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPinnedPoints([])}
+              className="text-xs font-medium text-rose-700 hover:text-rose-900 underline whitespace-nowrap"
+            >
+              Clear Pins ({pinnedPoints.length})
+            </button>
+          )}
         </div>
       </div>
 
       <div className="relative overflow-x-auto">
         <svg
           viewBox="0 0 900 235"
+          onClick={handleSvgClick}
           className="w-full h-auto select-none cursor-crosshair"
           role="img"
-          aria-label="Spectral dispersion map showing Grating Scan Range, Absolute Raman Range, 5 equal wavenumber bins, and Neon emission lines"
+          aria-label="Spectral dispersion map showing Grating Scan Range, Absolute Raman Range, 5 equal wavenumber bins, and Neon emission lines. Click anywhere to pin a wavenumber box."
         >
           {/* Background canvas */}
           <rect
@@ -229,7 +312,7 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
           {selectedLines.map((line) => {
             const x = toX(line.wavenumber);
             const isPcl = primaryCalibrationLine?.id === line.id;
-            const isSec = secondaryCalibrationLine?.id === line.id;
+            const isFocus = focusAnchorLines.some((f) => f.id === line.id);
             const baseY = showUploadedComparison ? 106 : 184;
             const maxH = showUploadedComparison ? 50 : 120;
             const h = Math.max(14, (line.relativeIntensity / 1000) * maxH);
@@ -238,15 +321,26 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
             return (
               <g
                 key={line.id}
-                onClick={() => onSelectPcl && onSelectPcl(line)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  pinWavenumber(
+                    line.wavenumber,
+                    isPcl
+                      ? 'Primary Calibration Line (PCL)'
+                      : isFocus
+                        ? 'inVia Lens Focus Line'
+                        : 'Picked Calibration Line'
+                  );
+                  if (onSelectPcl) onSelectPcl(line);
+                }}
                 onMouseEnter={() =>
                   setHoveredLine({
                     wavenumber: line.wavenumber,
                     intensity: line.relativeIntensity,
                     label: isPcl
                       ? 'Primary Calibration Line (PCL)'
-                      : isSec
-                        ? '2nd Calibration Line'
+                      : isFocus
+                        ? 'inVia Near/Far Lens Focus Line'
                         : 'Optimal Calibration Line',
                     source: `${line.wavelengthAirNm.toFixed(2)} nm`,
                   })
@@ -260,7 +354,7 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
                   x2={x}
                   y2={topY}
                   stroke={
-                    isPcl ? '#D97706' : isSec ? '#2563EB' : '#0891B2'
+                    isPcl ? '#D97706' : isFocus ? '#4F46E5' : '#0891B2'
                   }
                   strokeWidth={isPcl ? '3' : '2.2'}
                 />
@@ -268,7 +362,7 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
                   cx={x}
                   cy={topY}
                   r={isPcl ? 4.5 : 3}
-                  fill={isPcl ? '#F59E0B' : isSec ? '#3B82F6' : '#06B6D4'}
+                  fill={isPcl ? '#F59E0B' : isFocus ? '#6366F1' : '#06B6D4'}
                 />
                 {isPcl && (
                   <text
@@ -305,6 +399,13 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
               return (
                 <g
                   key={`up-${idx}-${u.wavenumberCm1}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pinWavenumber(
+                      u.wavenumberCm1,
+                      `Uploaded File Line #${u.rawLineNumber}`
+                    );
+                  }}
                   onMouseEnter={() =>
                     setHoveredLine({
                       wavenumber: u.wavenumberCm1,
@@ -319,6 +420,7 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
                     })
                   }
                   onMouseLeave={() => setHoveredLine(null)}
+                  className="cursor-pointer"
                 >
                   <line
                     x1={x}
@@ -332,6 +434,66 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
                 </g>
               );
             })}
+
+          {/* Render Pinned Wavenumber Boxes directly on the SVG Map */}
+          {pinnedPoints.map((pin, idx) => {
+            const px = toX(pin.wavenumberCm1);
+            const boxW = 128;
+            const boxH = 30;
+            // Stagger vertical height slightly if multiple pins are placed close together
+            const boxY = 18 + (idx % 3) * 34;
+            const boxX = Math.max(50, Math.min(850 - boxW, px - boxW / 2));
+
+            return (
+              <g
+                key={pin.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinnedPoints((prev) =>
+                    prev.filter((item) => item.id !== pin.id)
+                  );
+                }}
+                className="cursor-pointer"
+              >
+                <line
+                  x1={px}
+                  y1="16"
+                  x2={px}
+                  y2="190"
+                  stroke="#0F172A"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 2"
+                />
+                <circle cx={px} cy={boxY + boxH} r="3" fill="#0F172A" />
+                <rect
+                  x={boxX}
+                  y={boxY}
+                  width={boxW}
+                  height={boxH}
+                  rx="4"
+                  fill="#0F172A"
+                  stroke="#38BDF8"
+                  strokeWidth="1.2"
+                />
+                <text
+                  x={boxX + boxW / 2}
+                  y={boxY + 13}
+                  textAnchor="middle"
+                  className="fill-white font-mono text-[10px] font-bold"
+                >
+                  {pin.wavenumberCm1.toFixed(2)} cm⁻¹ ×
+                </text>
+                <text
+                  x={boxX + boxW / 2}
+                  y={boxY + 24}
+                  textAnchor="middle"
+                  className="fill-cyan-300 font-mono text-[8.5px]"
+                >
+                  {pin.ramanShiftCm1.toFixed(1)} Raman · {pin.wavelengthNm.toFixed(1)} nm
+                </text>
+              </g>
+            );
+          })}
 
           {/* X-Axis Labels */}
           <text
@@ -375,6 +537,48 @@ export const SpectralDispersionChart: React.FC<SpectralDispersionChartProps> = (
             Scan Low: {scanLowCm1.toFixed(1)}
           </text>
         </svg>
+
+        {/* Pinned Wavenumber Readout Boxes Tray */}
+        {pinnedPoints.length > 0 && (
+          <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {pinnedPoints.map((pin) => (
+              <div
+                key={pin.id}
+                className="flex items-start justify-between gap-2 rounded-lg border border-slate-300 bg-slate-900 px-3 py-2 text-xs text-white font-mono tabular-nums"
+              >
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                    <span>{pin.wavenumberCm1.toFixed(2)} cm⁻¹ (Abs)</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    Raman Shift: <strong>{pin.ramanShiftCm1.toFixed(2)} cm⁻¹</strong> ·{' '}
+                    {pin.wavelengthNm.toFixed(2)} nm
+                  </div>
+                  {pin.nearestLine && (
+                    <div className="text-[10px] text-slate-400 truncate font-sans">
+                      Nearest Ne I: {pin.nearestLine.wavenumber.toFixed(2)} cm⁻¹ (
+                      {pin.nearestDeltaCm1 && pin.nearestDeltaCm1 >= 0 ? '+' : ''}
+                      {pin.nearestDeltaCm1?.toFixed(2)} cm⁻¹)
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPinnedPoints((prev) =>
+                      prev.filter((item) => item.id !== pin.id)
+                    )
+                  }
+                  title="Unpin wavenumber box"
+                  className="rounded p-0.5 text-slate-400 hover:bg-slate-800 hover:text-white shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {hoveredLine && (
           <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-mono text-slate-700">

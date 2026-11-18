@@ -67,8 +67,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 10,
     empiricalRawCounts1800: 0,
     countsAt1s1800: 0,
-    closeNeighborWarning: '0 counts on 532nm 1800 l/mm FDA camera with visible lenses (blocked by 50 cm⁻¹ Rayleigh edge filter)',
-    notes: 'High-wavenumber anchor for 532nm 600 l/mm; not visible on 532nm 1800 l/mm FDA camera',
+    closeNeighborWarning: '0 counts on 532nm 1800 l/mm FDA camera with visible lenses (calibration performed without filters)',
+    notes: 'High-wavenumber anchor for 532nm 600 l/mm; not visible on 532nm 1800 l/mm FDA camera with visible lenses',
   },
   { id: 'ne-18716', wavenumber: 18716.08, wavelengthAirNm: 534.109, relativeIntensity: 580, fwhmCm1: 0.95, transition: '3p[1/2]1 - 4d[1/2]1', isPrimaryCandidate: false, notes: 'Close doublet with 18758.92' },
   {

@@ -309,7 +309,9 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
               {kinematics.windowHighRamanCm1.toFixed(1)} cm⁻¹
             </span>
             <span className="block text-[11px] text-slate-500 tabular-nums">
-              Filter Passband: {kinematics.filterTransmissionPct}% transmission
+              {params.filterType === 'standard'
+                ? `Std 50–4000 Filter Trans: ${kinematics.filterTransmissionPct}%`
+                : 'Cal Scan: No Filters in Path'}
             </span>
           </div>
 
@@ -636,12 +638,30 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
               </h3>
             </div>
             <p className="text-xs leading-relaxed text-slate-600">
-              Near and far internal lenses are focused using{' '}
-              <strong className="font-mono">18516.592 cm⁻¹</strong> and{' '}
-              <strong className="font-mono">15619.514 cm⁻¹</strong>, then zeroed
-              on the <strong className="font-mono">17086.75 cm⁻¹</strong>{' '}
-              Primary Calibration Line (0 offset prior to scanning 15300–19300
-              cm⁻¹ Abs in 50 cm⁻¹ steps).
+              {params.spectrograph === 'Virsa' ? (
+                <>
+                  <strong>Virsa</strong> uses a{' '}
+                  <strong>single movable lens</strong>, then zeroes on the{' '}
+                  <strong className="font-mono">
+                    {primaryCalibrationLine?.wavenumber.toFixed(2) ?? '17086.75'}{' '}
+                    cm⁻¹
+                  </strong>{' '}
+                  Primary Calibration Line (0 offset prior to scanning).
+                </>
+              ) : (
+                <>
+                  On <strong>{params.spectrograph}</strong>, multiple internal
+                  lenses (near &amp; far) are focused by optimising the{' '}
+                  <strong>intensity / peak height</strong> of lines at both ends
+                  of the spectrum (e.g.{' '}
+                  <strong className="font-mono">18516.592 cm⁻¹</strong> &amp;{' '}
+                  <strong className="font-mono">15619.514 cm⁻¹</strong> on 532
+                  nm), then zeroed on the{' '}
+                  <strong className="font-mono">17086.75 cm⁻¹</strong> Primary
+                  Calibration Line (0 offset prior to scanning 15300–19300 cm⁻¹
+                  Abs in 50 cm⁻¹ steps).
+                </>
+              )}
             </p>
             <p className="text-xs leading-relaxed text-slate-600">
               Because <strong className="font-mono">17086.75 cm⁻¹</strong>{' '}
@@ -690,13 +710,13 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
             </div>
             <div>
               <span className="block font-sans text-[11px] text-slate-500">
-                Filter Roll-Off &amp; Fit RMS
+                Std Filter Trans. &amp; Fit RMS
               </span>
               <span className="text-sm font-bold text-emerald-700 tabular-nums">
                 0.1282 cm⁻¹ RMS
               </span>
               <span className="block text-[11px] text-slate-500 tabular-nums">
-                65% signal @ 7500 cm⁻¹ shift
+                50–4000 filter: 65% @ 7500 cm⁻¹
               </span>
             </div>
           </div>

@@ -207,11 +207,12 @@ export function degreesToMotorSteps(degrees: number): number {
 }
 
 /**
- * Computes the optical filter transmission percentage as a function of Raman shift (cm^-1).
- * From empirical reference (update.txt):
- * - Below Rayleigh cut-off (~40 cm^-1, e.g. 18758.99 cm^-1 on 532nm): 0% (blocked by edge filter)
+ * Computes the standard 50–4000 cm^-1 filter transmission percentage as a function of Raman shift (cm^-1).
+ * Note: Neon bulb calibration scans (such as 532nm_1800.lns) are performed without filters in place.
+ * When standard 50–4000 cm^-1 filters are installed in the beam path (update.txt):
+ * - Below Rayleigh cut-off (<45 cm^-1): 0% (blocked by Rayleigh filter)
  * - 50 to 5000 cm^-1 Raman shift: ~100% passband transmission
- * - Starts dropping off at ~5000 cm^-1, reaching 65% at ~7500 cm^-1 and ~55% at 8000 cm^-1.
+ * - Filter transmission starts dropping off at ~5000 cm^-1, reaching 65% at ~7500 cm^-1.
  */
 export function calculateFilterTransmissionPct(ramanShiftCm1: number): number {
   if (ramanShiftCm1 < 42) {
@@ -775,7 +776,7 @@ export function solveCalibration(
     ramanMin = 50;
     ramanMax = 8500;
     limitingFactors.push(
-      'RPL / PL Extended Filter (50–8500 cm⁻¹ Raman shift; signal rolls off above ~5000 cm⁻¹ to ~65% at 7500 cm⁻¹)'
+      'RPL / PL Extended Filter (50–8500 cm⁻¹ Raman shift)'
     );
   } else {
     ramanMin = Math.max(0, params.customRamanMinCm1);
@@ -895,7 +896,7 @@ export function solveCalibration(
 
   const candidatePool = NEON_CATALOG.filter((line) => {
     if (line.excludeFromAutoPick) return false;
-    // On 532nm + 1800 l/mm with FDA camera, 18758.92 cm^-1 has 0 counts (blocked by 50 cm^-1 filter edge)
+    // On 532nm + 1800 l/mm with FDA camera and visible lenses, 18758.92 cm^-1 has 0 counts (not visible)
     if (
       Math.abs(params.laserNm - 532) < 0.5 &&
       params.gratingLinesPerMm >= 1800 &&
@@ -911,13 +912,36 @@ export function solveCalibration(
     );
   }).sort((a, b) => b.wavenumber - a.wavenumber);
 
-  // Identify near/far lens focus anchor lines inside scan range (e.g., 18516.48 & 15619.12 for 532nm)
-  const focusAnchorLines = NEON_CATALOG.filter(
-    (l) =>
-      l.isFocusAnchor &&
-      l.wavenumber <= scanHighCm1 &&
-      l.wavenumber >= scanLowCm1
-  );
+  // Identify near/far lens focus anchor lines at both ends of the spectrum for multi-lens systems (inVia).
+  // Virsa has only 1 movable lens and does not use dual near/far lens focus lines.
+  let focusAnchorLines: NeonLine[] = [];
+  if (params.spectrograph !== 'Virsa') {
+    const explicitFocus = NEON_CATALOG.filter(
+      (l) =>
+        l.isFocusAnchor &&
+        l.wavenumber <= scanHighCm1 &&
+        l.wavenumber >= scanLowCm1
+    ).sort((a, b) => b.wavenumber - a.wavenumber);
+
+    if (explicitFocus.length >= 2 && Math.abs(params.laserNm - 532) < 1.5) {
+      focusAnchorLines = explicitFocus;
+    } else if (candidatePool.length >= 2) {
+      const span = Math.max(200, absHighCm1 - absLowCm1);
+      const highEndCandidates = candidatePool.filter(
+        (l) => l.wavenumber >= absHighCm1 - span * 0.28
+      );
+      const lowEndCandidates = candidatePool.filter(
+        (l) => l.wavenumber <= absLowCm1 + span * 0.28
+      );
+      const bestHigh = [...(highEndCandidates.length ? highEndCandidates : candidatePool)].sort(
+        (a, b) => b.relativeIntensity - a.relativeIntensity
+      )[0];
+      const bestLow = [...(lowEndCandidates.length ? lowEndCandidates : candidatePool)]
+        .filter((l) => l.id !== bestHigh?.id)
+        .sort((a, b) => b.relativeIntensity - a.relativeIntensity)[0];
+      focusAnchorLines = [bestHigh, bestLow].filter(Boolean);
+    }
+  }
 
   // 9. Select Primary Calibration Line (PCL) near centre of calibration range
   let primaryCalibrationLine: NeonLine | null = null;

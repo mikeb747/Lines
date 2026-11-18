@@ -297,7 +297,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Card 3: Primary & 2nd Calibration Lines */}
+            {/* Card 3: Primary Calibration Line & Lens Focus Architecture */}
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">
               <div className="text-xs text-slate-500">
                 Primary Calibration Line (PCL)
@@ -310,12 +310,12 @@ export default function App() {
                 </span>
                 <span className="text-xs font-mono text-slate-400">cm⁻¹</span>
               </div>
-              <div className="text-xs font-mono text-slate-500 tabular-nums">
-                2nd Cal Line:{' '}
-                {solution.secondaryCalibrationLine
-                  ? `${solution.secondaryCalibrationLine.wavenumber.toFixed(2)} cm⁻¹`
-                  : '—'}{' '}
-                · {solution.selectedLines.length} Picked
+              <div className="text-xs font-mono text-slate-500 tabular-nums truncate">
+                {params.spectrograph === 'Virsa'
+                  ? `Virsa: 1 Movable Lens · ${solution.selectedLines.length} Picked`
+                  : solution.focusAnchorLines.length >= 2
+                    ? `inVia Focus: ${solution.focusAnchorLines[0].wavenumber.toFixed(1)} & ${solution.focusAnchorLines[1].wavenumber.toFixed(1)}`
+                    : `${solution.selectedLines.length} Picked Lines`}
               </div>
             </div>
 

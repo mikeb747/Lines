@@ -19,8 +19,9 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   const {
+    params,
     primaryCalibrationLine,
-    secondaryCalibrationLine,
+    focusAnchorLines,
     selectedLines,
     candidatePool,
     binDistribution,
@@ -51,7 +52,7 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Interactive Dispersion Map (Clicking a line sets it as PCL) */}
+      {/* Interactive Dispersion Map (Clicking any point pins wavenumber; clicking a line also sets PCL) */}
       <SpectralDispersionChart
         solution={solution}
         showUploadedComparison={false}
@@ -117,14 +118,14 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
           </div>
         </div>
 
-        {/* PCL Centrality & Pre-Calibration Drift Guard */}
+        {/* PCL Centrality, inVia/Virsa Lens Focus & Pre-Calibration Drift Guard */}
         <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
                 <h3 className="text-sm font-semibold text-slate-900">
-                  PCL Alignment & Line Confusion Guard
+                  PCL Alignment, Lens Focus &amp; Confusion Guard
                 </h3>
               </div>
               {solution.params.manualPclOverrideCm1 && (
@@ -139,14 +140,27 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
             </div>
 
             <p className="text-xs leading-relaxed text-slate-600">
-              Before calibration, lenses are manually aligned to the CCD centre
-              and offset so the{' '}
+              Before calibration, lenses are aligned to the CCD centre and
+              offset so the{' '}
               <strong>
                 Primary Calibration Line (PCL:{' '}
                 {primaryCalibrationLine?.wavenumber.toFixed(2) ?? '—'} cm⁻¹)
               </strong>{' '}
-              reads at its exact wavenumber. Lines further from the PCL deviate
-              proportionally to <code className="font-mono">|ν − ν_PCL|</code>.
+              reads at its exact wavenumber.{' '}
+              {params.spectrograph === 'Virsa' ? (
+                <span>
+                  <strong>Virsa</strong> uses a{' '}
+                  <strong>single movable lens</strong> (no dual near/far focus
+                  anchor lines required).
+                </span>
+              ) : (
+                <span>
+                  On <strong>{params.spectrograph}</strong>, multiple internal
+                  (near/far) lenses are focused by optimising the{' '}
+                  <strong>intensity / peak height</strong> of lines at both ends
+                  of the spectrum.
+                </span>
+              )}
             </p>
             <p className="text-xs leading-relaxed text-slate-600">
               For a{' '}
@@ -178,15 +192,21 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
             </div>
             <div>
               <span className="block font-sans text-[11px] text-slate-500">
-                2nd Calibration Line Anchor
+                {params.spectrograph === 'Virsa'
+                  ? 'Virsa Lens Architecture'
+                  : 'inVia Near / Far Focus Lines'}
               </span>
               <span className="text-sm font-bold text-slate-900 tabular-nums">
-                {secondaryCalibrationLine
-                  ? `${secondaryCalibrationLine.wavenumber.toFixed(2)} cm⁻¹`
-                  : 'None'}
+                {params.spectrograph === 'Virsa'
+                  ? '1 Movable Lens'
+                  : focusAnchorLines.length >= 2
+                    ? `${focusAnchorLines[0].wavenumber.toFixed(1)} & ${focusAnchorLines[1].wavenumber.toFixed(1)}`
+                    : '—'}
               </span>
               <span className="block text-[11px] text-slate-500 tabular-nums">
-                Min Spacing: ≥{minRequiredLineSpacingCm1.toFixed(1)} cm⁻¹
+                {params.spectrograph === 'Virsa'
+                  ? `Min Spacing: ≥${minRequiredLineSpacingCm1.toFixed(1)} cm⁻¹`
+                  : 'Optimise peak height at both ends'}
               </span>
             </div>
           </div>
@@ -202,7 +222,8 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
               lines shown)
             </h3>
             <p className="text-xs text-slate-500">
-              Showing lines for Scan Range{' '}
+              All 3 views filter the same NIST + empirical{' '}
+              <code className="font-mono">.lns</code> Neon catalog for Scan Range{' '}
               <span className="font-mono tabular-nums">
                 {scanHighCm1.toFixed(1)} – {scanLowCm1.toFixed(1)} cm⁻¹
               </span>
@@ -280,7 +301,7 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
               {filteredList.map((line) => {
                 const isSelected = selectedLines.some((s) => s.id === line.id);
                 const isPcl = primaryCalibrationLine?.id === line.id;
-                const isSec = secondaryCalibrationLine?.id === line.id;
+                const isFocus = focusAnchorLines.some((f) => f.id === line.id);
                 const ramanShift =
                   solution.laserWavenumberCm1 - line.wavenumber;
                 const distFromPcl = primaryCalibrationLine
@@ -310,9 +331,9 @@ export const LinePickerView: React.FC<LinePickerViewProps> = ({
                         <span className="font-mono font-semibold text-amber-700">
                           ● Primary (PCL)
                         </span>
-                      ) : isSec ? (
-                        <span className="font-mono font-semibold text-blue-700">
-                          ◆ 2nd Cal Line
+                      ) : isFocus ? (
+                        <span className="font-mono font-semibold text-indigo-700">
+                          ◆ inVia Lens Focus
                         </span>
                       ) : isSelected ? (
                         <span className="font-mono font-medium text-cyan-700">

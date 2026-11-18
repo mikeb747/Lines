@@ -290,7 +290,7 @@ export function auditCalibrationFile(
       );
     }
 
-    // Check for 0-count / unobservable Rayleigh filter blocked line (e.g. 18758.990 with 0 counts on 1800 grating)
+    // Check for 0-count / unobservable line (e.g. 18758.990 with 0 counts on 1800 grating with FDA camera & visible lenses)
     if (
       declaredIntensity === 0 ||
       (inlineNote && /not visible/i.test(inlineNote))
@@ -299,7 +299,7 @@ export function auditCalibrationFile(
       issueMessages.push(
         inlineNote ||
           matchedCatalogLine?.closeNeighborWarning ||
-          `0 counts recorded — blocked by Rayleigh edge filter / visible lens cut-off on ${params.gratingLinesPerMm} l/mm.`
+          `0 counts recorded — not visible with ${params.gratingLinesPerMm} l/mm grating on ${params.ccdType} camera with visible lenses.`
       );
     }
 
