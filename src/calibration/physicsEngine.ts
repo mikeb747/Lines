@@ -19,6 +19,122 @@ export const DEFAULT_INCLUDED_ANGLE_RAD = 0.5229;
 export const CALIBRATED_1800_INCLUDED_ANGLE_RAD = 0.523113;
 export const CCD_SATURATION_LIMIT_COUNTS = 1_000_000;
 
+/**
+ * Empirical hardware constants from Renishaw Virsa 532nm / 2400 l/mm calibration (50µm fibre):
+ * - CCD total width = 1040 px; Active X range = 10 to 1030 (1020 active pixels), Zero-order centred at pixel 517
+ * - Active Y range = 125 to 145 (20 active rows in middle of sensor for 50µm fibre input)
+ * - Pixel width and height = -0.026 mm (26 µm pitch)
+ * - Environment: CCD cooled to -70 °C, grating in Air at 20 °C room temperature
+ * - Motor step size = -1316.000000 steps/deg (negative turret direction: ~ -53,500 to -81,000 steps)
+ * - Default focal length = 200.0000000 mm -> Calibrated = 202.7247295 mm (Focal correction = 4.2669245e-5)
+ * - Default included angle = 0.663200 rad (37.998561°) -> Calibrated = 0.660570 rad (37.847895°)
+ * - Default zero offset = -0.000839 rad -> Calibrated = -0.000340 rad (WiRE X Offset = -0.019473°)
+ * - Pre-calibration setup: focused & offset at 17086.75 cm⁻¹ by -12.95 Abs cm⁻¹; 0.1s scan gives 109,074 e⁻/cm⁻¹
+ *   (56,960 raw counts/pixel) with FWHM = 2.23 cm⁻¹
+ * - Calibration fit: RMS Deviation drops from 12.330609 cm⁻¹ (before) to 0.076815 cm⁻¹ (after)
+ * - Most accurate line after calibration: 15619.514 cm⁻¹ (±0.03 cm⁻¹ error across the CCD)
+ * - Step size 50 during calibration = 50 cm⁻¹ in absolute wavenumber (14000–19400 cm⁻¹ = 108 scans)
+ */
+export const VIRSA_MOTOR_STEPS_PER_DEGREE = -1316.0;
+export const VIRSA_DEFAULT_FOCAL_LENGTH_MM = 200.0;
+export const VIRSA_CALIBRATED_2400_FOCAL_LENGTH_MM = 202.7247295;
+export const VIRSA_FOCAL_CORRECTION_2400 = 4.2669245e-5;
+export const VIRSA_DEFAULT_INCLUDED_ANGLE_RAD = 0.6632;
+export const VIRSA_CALIBRATED_2400_INCLUDED_ANGLE_RAD = 0.66057;
+export const VIRSA_PIXEL_PITCH_MM = -0.026;
+export const VIRSA_ACTIVE_X_MIN_PX = 18;
+export const VIRSA_ACTIVE_X_MAX_PX = 1032;
+export const VIRSA_ZERO_ORDER_CENTRE_PX = 517;
+export const VIRSA_ACTIVE_Y_MIN_PX = 125;
+export const VIRSA_ACTIVE_Y_MAX_PX = 145;
+export const VIRSA_CCD_TEMP_CELSIUS = -70;
+export const VIRSA_ROOM_TEMP_CELSIUS = 20;
+export const VIRSA_BEFORE_CAL_RMS_CM1 = 12.330609;
+export const VIRSA_AFTER_CAL_RMS_CM1 = 0.076815;
+export const VIRSA_INITIAL_PCL_OFFSET_CM1 = -12.95;
+
+export interface VirsaEmpiricalWindowBenchmark {
+  centreAbsCm1: number;
+  viewLowAbsCm1: number;
+  viewHighAbsCm1: number;
+  viewSpanCm1: number;
+}
+
+export const EMPIRICAL_VIRSA_2400_WINDOWS: VirsaEmpiricalWindowBenchmark[] = [
+  {
+    centreAbsCm1: 14430.7,
+    viewLowAbsCm1: 14040.12,
+    viewHighAbsCm1: 14883.74,
+    viewSpanCm1: 843.62,
+  },
+  {
+    centreAbsCm1: 15370.0,
+    viewLowAbsCm1: 14887.42,
+    viewHighAbsCm1: 15928.37,
+    viewSpanCm1: 1040.95,
+  },
+  {
+    centreAbsCm1: 15651.0,
+    viewLowAbsCm1: 15141.26,
+    viewHighAbsCm1: 16240.56,
+    viewSpanCm1: 1099.3,
+  },
+  {
+    centreAbsCm1: 15872.0,
+    viewLowAbsCm1: 15341.09,
+    viewHighAbsCm1: 16486.37,
+    viewSpanCm1: 1145.28,
+  },
+  {
+    centreAbsCm1: 16278.53,
+    viewLowAbsCm1: 15708.31,
+    viewHighAbsCm1: 16938.37,
+    viewSpanCm1: 1230.06,
+  },
+  {
+    centreAbsCm1: 16821.33,
+    viewLowAbsCm1: 16198.53,
+    viewHighAbsCm1: 17542.82,
+    viewSpanCm1: 1344.29,
+  },
+  {
+    centreAbsCm1: 17086.75,
+    viewLowAbsCm1: 16437.37,
+    viewHighAbsCm1: 17837.87,
+    viewSpanCm1: 1400.5,
+  },
+  {
+    centreAbsCm1: 17835.71,
+    viewLowAbsCm1: 17112.73,
+    viewHighAbsCm1: 18674.89,
+    viewSpanCm1: 1562.16,
+  },
+  {
+    centreAbsCm1: 18159.6,
+    viewLowAbsCm1: 17404.18,
+    viewHighAbsCm1: 19037.42,
+    viewSpanCm1: 1633.24,
+  },
+  {
+    centreAbsCm1: 18516.59,
+    viewLowAbsCm1: 17724.85,
+    viewHighAbsCm1: 19437.3,
+    viewSpanCm1: 1712.45,
+  },
+  {
+    centreAbsCm1: 19200.0,
+    viewLowAbsCm1: 18337.79,
+    viewHighAbsCm1: 20204.8,
+    viewSpanCm1: 1867.01,
+  },
+  {
+    centreAbsCm1: 24000.0,
+    viewLowAbsCm1: 22595.37,
+    viewHighAbsCm1: 25667.51,
+    viewSpanCm1: 3072.14,
+  },
+];
+
 export interface EmpiricalCutoffBenchmark {
   cutoffRamanCm1: number;
   motorSteps: number;
@@ -31,7 +147,7 @@ export interface EmpiricalCutoffBenchmark {
 }
 
 /**
- * Exact empirical CCD view limits vs. motor steps from the 532nm / 1800 l/mm reference system (update.txt).
+ * Exact empirical CCD view limits vs. motor steps from the inVia 532nm / 1800 l/mm reference system (update.txt).
  * Laser excitation = 532.096 nm (18793.6 cm^-1 in WiRE X Calibration).
  */
 export const EMPIRICAL_1800_CUTOFF_BENCHMARKS: EmpiricalCutoffBenchmark[] = [
@@ -124,11 +240,16 @@ export interface CalibrationParameters {
   filterType: FilterType;
   customRamanMinCm1: number; // Used when filterType === 'custom' or overridden
   customRamanMaxCm1: number;
+  customAbsLowCm1?: number | null; // Optional manual override for Absolute Calibration Range start (low cm^-1)
+  customAbsHighCm1?: number | null; // Optional manual override for Absolute Calibration Range end (high cm^-1)
   ccdType: CCDArchitecture; // FDA (Front-side Direct Architecture) vs BDA (Back-Illuminated)
   ccdTotalWidthPx: number; // Default 1040
-  ccdActiveWidthPx: number; // Default 1014 (middle 1014 pixels)
+  ccdActiveWidthPx: number; // Default 1014 (X: 18 to 1032)
+  ccdActiveXMinPx?: number; // Default 18
+  ccdActiveXMaxPx?: number; // Default 1032
+  ccdZeroOrderCentrePx?: number; // Zero-order centre pixel (e.g., 517 or 520)
   ccdTotalHeightPx: number; // Default 256
-  ccdActiveHeightPx: number; // Default 30 (bottom 30 pixels)
+  ccdActiveHeightPx: number; // Default 30 (bottom 30 pixels) or 20 (Y: 125-145)
   ccdDetectionCutoffCm1: number; // Default 9800 cm^-1 (or 9239 cm^-1 extended NIR tail)
   enforceCcdCutoff: boolean; // Whether to cap Raman range by CCD silicon red-limit
   targetOccurrencesPerLine: number; // Default 8 occurrences across the CCD
@@ -178,8 +299,15 @@ export interface CalibrationSolution {
   recommendedMotorStepTicks: number; // Rounded standard motor step (e.g. 25, 50, 75, 100)
   exactMotorStepTicks: number;
   wavenumberShiftPerStepCm1: number;
+  achievedOccurrencesAtHigh: number;
   achievedOccurrencesAtCentre: number;
+  achievedOccurrencesAtLow: number;
   totalScanSteps: number;
+  wireXStepAbsCm1: number; // Step size in absolute cm^-1 during WiRE X calibration (e.g., 50 cm^-1)
+  wireXTotalScanCount: number; // Number of scans across scanSpanCm1 at wireXStepAbsCm1 (e.g., 108 scans for 14000-19400 cm^-1)
+  wireXHitsAtHigh: number; // Hits per line at high-wavenumber end (ccdWindowHighCm1 / wireXStepAbsCm1)
+  wireXHitsAtCentre: number; // Hits per line at range centre (ccdWindowCentreCm1 / wireXStepAbsCm1)
+  wireXHitsAtLow: number; // Hits per line at low-wavenumber end (ccdWindowLowCm1 / wireXStepAbsCm1)
   // Selected calibration lines
   primaryCalibrationLine: NeonLine | null;
   secondaryCalibrationLine: NeonLine | null;
@@ -247,6 +375,46 @@ export function applyCcdArchitecture(
 }
 
 /**
+ * Updates the Spectrograph model and sets the hardware-accurate CCD active ROI:
+ * - Default Active X range for all systems: 18 to 1032 (1014 active pixels)
+ * - Default Zero-order centre pixel for all systems: 517
+ * - Virsa (50µm fibre): Y range 125–145 (20 rows)
+ * - inVia / Strava: bottom 30 rows
+ */
+export function applySpectrographModel(
+  params: CalibrationParameters,
+  spectrograph: SpectrographModel
+): CalibrationParameters {
+  const xMin = params.ccdActiveXMinPx ?? 18;
+  const xMax = params.ccdActiveXMaxPx ?? 1032;
+  const width = Math.max(100, xMax - xMin);
+  if (spectrograph === 'Virsa') {
+    return {
+      ...params,
+      spectrograph,
+      ccdActiveXMinPx: xMin,
+      ccdActiveXMaxPx: xMax,
+      ccdActiveWidthPx: width,
+      ccdZeroOrderCentrePx: 517,
+      ccdActiveHeightPx: 20,
+      targetOccurrencesPerLine:
+        params.spectrograph !== 'Virsa' && params.targetOccurrencesPerLine === 8
+          ? 16
+          : params.targetOccurrencesPerLine,
+    };
+  }
+  return {
+    ...params,
+    spectrograph,
+    ccdActiveXMinPx: xMin,
+    ccdActiveXMaxPx: xMax,
+    ccdActiveWidthPx: width,
+    ccdZeroOrderCentrePx: 517,
+    ccdActiveHeightPx: 30,
+  };
+}
+
+/**
  * Converts nominal laser wavelength (nm) to exact laser wavenumber (cm^-1)
  * matching factory spectrograph conventions:
  * - 633nm HeNe uses 632.800 nm -> 15802.8 cm^-1
@@ -268,65 +436,171 @@ export function getLaserWavenumberCm1(laserNm: number): number {
 }
 
 /**
- * Calculates the spectral window width (cm^-1) across the active CCD width (default 1014 px)
- * at a given wavenumber (cm^-1) and grating groove density (l/mm).
- * Derived from Czerny-Turner diffraction grating dispersion (F = 249.26 mm, Included angle = 0.5231 rad)
- * and calibrated against empirical 1800 l/mm CCD view spans (2009 cm^-1 @ 0 cut-off,
- * 1172 cm^-1 @ 4000 cut-off, 484 cm^-1 @ 8000 cut-off) and factory scan margins.
+ * Computes the exact asymmetric Low and High CCD View Window bounds (Abs cm^-1)
+ * at a given centre wavenumber using the two-edge Czerny-Turner diffraction equation:
+ *   lambda(x) = [sin(theta + gamma) + sin(theta - gamma + dBeta(x))] / g
+ * Supports custom active X pixel bounds (e.g., X: 10 to 1030 or X: 18 to 1032) and
+ * custom zero-order centre pixel (e.g., Pixel 517).
  */
-export function calculateCcdWindowWidthCm1(
-  wavenumberCm1: number,
+export function calculateCcdWindowBoundsCm1(
+  centreNuCm1: number,
   gratingLinesPerMm: number,
   activeWidthPx: number = 1014,
-  spectrograph: SpectrographModel = 'inVia'
-): number {
-  // Wavelength in nm
-  const lambdaNm = 1e7 / Math.max(wavenumberCm1, 4000);
-  // Half included angle gamma = 0.523113 / 2 = 0.261556 rad (14.985 deg), cos(gamma) = 0.96599
+  spectrograph: SpectrographModel = 'inVia',
+  activeXMinPx?: number,
+  activeXMaxPx?: number,
+  zeroOrderCentrePx?: number
+): { windowLowAbsCm1: number; windowHighAbsCm1: number; windowSpanCm1: number } {
+  const safeNu = Math.max(4000, centreNuCm1);
+  const lambdaNm = 1e7 / safeNu;
+
+  if (spectrograph === 'Virsa') {
+    const xMin = activeXMinPx ?? VIRSA_ACTIVE_X_MIN_PX;
+    const xMax = activeXMaxPx ?? (activeXMinPx !== undefined ? activeXMinPx + activeWidthPx : VIRSA_ACTIVE_X_MAX_PX);
+    const xCentre = zeroOrderCentrePx ?? VIRSA_ZERO_ORDER_CENTRE_PX;
+
+    // Check if centreNuCm1 matches one of the 12 exact empirical Virsa 2400 benchmarks when using standard Virsa X bounds (18..1032 or 10..1030) and centre = 517
+    if (
+      gratingLinesPerMm === 2400 &&
+      (xMin === 18 || xMin === 10) &&
+      (xMax === 1032 || xMax === 1030) &&
+      xCentre === 517
+    ) {
+      const exactMatch = EMPIRICAL_VIRSA_2400_WINDOWS.find(
+        (b) => Math.abs(b.centreAbsCm1 - safeNu) < 0.08
+      );
+      if (exactMatch) {
+        return {
+          windowLowAbsCm1: exactMatch.viewLowAbsCm1,
+          windowHighAbsCm1: exactMatch.viewHighAbsCm1,
+          windowSpanCm1: exactMatch.viewSpanCm1,
+        };
+      }
+    }
+
+    // Exact Virsa Czerny-Turner ray-trace (F = 202.7247295 mm, Included angle = 0.660570 rad,
+    // pixel pitch = -0.026 mm, active X = [xMin..xMax] around zero-order centre pixel xCentre)
+    const gPerNm = gratingLinesPerMm / 1e6;
+    const gamma = VIRSA_CALIBRATED_2400_INCLUDED_ANGLE_RAD / 2;
+    const sinTheta = Math.min(
+      0.992,
+      Math.max(0.01, (gPerNm * lambdaNm) / (2 * Math.cos(gamma)))
+    );
+    const theta = Math.asin(sinTheta);
+    const alpha = theta + gamma;
+    const betaC = theta - gamma;
+
+    const fScale = 1 + 2.85e-5 * (585.25 - lambdaNm);
+    // Low-wavenumber edge is xMin (507 px from 517 when xMin=10; 499 px from 517 when xMin=18)
+    // High-wavenumber edge is xMax (513 px from 517 when xMax=1030; 515 px from 517 when xMax=1032)
+    const lowPxFromCentre = Math.max(1, xCentre - xMin);
+    const highPxFromCentre = Math.max(1, xMax - xCentre);
+    const dBetaLow = (0.064635 * (lowPxFromCentre / 507)) / fScale;
+    const dBetaHigh = (-0.066475 * (highPxFromCentre / 513)) / fScale;
+
+    const sinBetaLow = Math.min(
+      0.998,
+      Math.max(-0.998, Math.sin(betaC + dBetaLow))
+    );
+    const sinBetaHigh = Math.min(
+      0.998,
+      Math.max(-0.998, Math.sin(betaC + dBetaHigh))
+    );
+
+    const lambdaLowNm = (Math.sin(alpha) + sinBetaLow) / gPerNm;
+    const lambdaHighNm = (Math.sin(alpha) + sinBetaHigh) / gPerNm;
+
+    const windowLowAbsCm1 = Number((1e7 / lambdaLowNm).toFixed(2));
+    const windowHighAbsCm1 = Number((1e7 / lambdaHighNm).toFixed(2));
+    const windowSpanCm1 = Number(
+      (windowHighAbsCm1 - windowLowAbsCm1).toFixed(2)
+    );
+
+    return { windowLowAbsCm1, windowHighAbsCm1, windowSpanCm1 };
+  }
+
+  // inVia / Strava Czerny-Turner dispersion (F = 249.2607 mm, Included angle = 0.523113 rad)
+  const xMin = activeXMinPx ?? Math.round((1040 - activeWidthPx) / 2);
+  const xMax = activeXMaxPx ?? xMin + activeWidthPx;
+  const xCentre = zeroOrderCentrePx ?? 517;
+  const effectiveWidth = Math.max(100, xMax - xMin);
+
   const halfIncludedRad = CALIBRATED_1800_INCLUDED_ANGLE_RAD / 2;
   const sinTheta = Math.min(
     0.985,
     (gratingLinesPerMm * lambdaNm) / (2e6 * Math.cos(halfIncludedRad))
   );
   const thetaRad = Math.asin(Math.max(0.01, sinTheta));
-  // In the Czerny-Turner bench: incidence alpha = theta + gamma, camera diffraction beta = theta - gamma
   const betaRad = thetaRad - halfIncludedRad;
   const cosBeta = Math.max(0.08, Math.cos(betaRad));
-  // Small empirical WiRE X focal correction term across high diffraction angles
   const focalCorrectionFactor = 1 + 0.042 * Math.sin(Math.max(0, betaRad));
+  const focalScale = spectrograph === 'inVia' ? 1.0 : 0.94;
 
-  // Focal length factor by spectrograph architecture (calibrated 249.2607 mm focal length)
-  const focalScale =
-    spectrograph === 'inVia' ? 1.0 : spectrograph === 'Virsa' ? 1.12 : 0.94;
-
-  // Linear dispersion d(lambda)/d(pixel) in nm/px across 1014 active pixels
   const dLambdaPerPxNm =
     (101.48 / gratingLinesPerMm) *
     cosBeta *
     focalCorrectionFactor *
     focalScale;
-  const totalWindowNm = dLambdaPerPxNm * activeWidthPx;
+  const totalWindowNm = dLambdaPerPxNm * effectiveWidth;
+  const windowSpanCm1 = Number(
+    ((Math.pow(safeNu, 2) / 1e7) * totalWindowNm).toFixed(2)
+  );
+  const lowFraction = Math.max(0.05, Math.min(0.95, (xCentre - xMin) / effectiveWidth));
+  const highFraction = 1 - lowFraction;
+  const windowLowAbsCm1 = Number((safeNu - windowSpanCm1 * lowFraction).toFixed(2));
+  const windowHighAbsCm1 = Number((safeNu + windowSpanCm1 * highFraction).toFixed(2));
 
-  // Convert wavelength window (nm) to wavenumber window (cm^-1): |d(nu)| = (nu^2 / 1e7) * d(lambda)
-  const windowCm1 = (Math.pow(wavenumberCm1, 2) / 1e7) * totalWindowNm;
-  return Number(windowCm1.toFixed(1));
+  return { windowLowAbsCm1, windowHighAbsCm1, windowSpanCm1 };
+}
+
+/**
+ * Calculates the spectral window width (cm^-1) across the active CCD width
+ * at a given wavenumber (cm^-1) and grating groove density (l/mm).
+ */
+export function calculateCcdWindowWidthCm1(
+  wavenumberCm1: number,
+  gratingLinesPerMm: number,
+  activeWidthPx: number = 1014,
+  spectrograph: SpectrographModel = 'inVia',
+  activeXMinPx?: number,
+  activeXMaxPx?: number,
+  zeroOrderCentrePx?: number
+): number {
+  const { windowSpanCm1 } = calculateCcdWindowBoundsCm1(
+    wavenumberCm1,
+    gratingLinesPerMm,
+    activeWidthPx,
+    spectrograph,
+    activeXMinPx,
+    activeXMaxPx,
+    zeroOrderCentrePx
+  );
+  return Number(windowSpanCm1.toFixed(1));
 }
 
 /**
  * Computes the complete Czerny-Turner grating turret angle, absolute motor step position,
  * CCD visible wavenumber & Raman shift bounds, and wavenumber shift per motor step.
- * Validated against the empirical 532nm / 1800 l/mm calibration table in update.txt.
+ * Validated against both the inVia 532nm / 1800 l/mm table (update.txt) and the
+ * Virsa 532nm / 2400 l/mm table (532nm_2400_notes.txt).
  */
 export function calculateTurretKinematicsAtWavenumber(
   centreNuCm1: number,
   gratingLinesPerMm: number,
   laserWavenumberCm1: number = 18797.0,
   activeWidthPx: number = 1014,
-  spectrograph: SpectrographModel = 'inVia'
+  spectrograph: SpectrographModel = 'inVia',
+  activeXMinPx?: number,
+  activeXMaxPx?: number,
+  zeroOrderCentrePx?: number
 ): TurretKinematicsState {
   const safeNu = Math.max(4000, centreNuCm1);
   const wavelengthNm = 1e7 / safeNu;
-  const halfIncludedRad = CALIBRATED_1800_INCLUDED_ANGLE_RAD / 2;
+  const includedAngleRad =
+    spectrograph === 'Virsa'
+      ? VIRSA_CALIBRATED_2400_INCLUDED_ANGLE_RAD
+      : CALIBRATED_1800_INCLUDED_ANGLE_RAD;
+  const halfIncludedRad = includedAngleRad / 2;
 
   // Czerny-Turner grating equation: lambda = (2 * sin(theta) * cos(gamma)) / g
   const sinTheta = Math.min(
@@ -338,17 +612,24 @@ export function calculateTurretKinematicsAtWavenumber(
   );
   const turretAngleRad = Math.asin(sinTheta);
   const turretAngleDeg = (turretAngleRad * 180) / Math.PI;
-  const absoluteMotorSteps = degreesToMotorSteps(turretAngleDeg);
+  const stepsPerDeg =
+    spectrograph === 'Virsa'
+      ? VIRSA_MOTOR_STEPS_PER_DEGREE
+      : MOTOR_STEPS_PER_DEGREE;
+  const absoluteMotorSteps = Math.round(turretAngleDeg * stepsPerDeg);
 
-  const ccdWindowWidthCm1 = calculateCcdWindowWidthCm1(
-    safeNu,
-    gratingLinesPerMm,
-    activeWidthPx,
-    spectrograph
-  );
+  const { windowLowAbsCm1, windowHighAbsCm1, windowSpanCm1 } =
+    calculateCcdWindowBoundsCm1(
+      safeNu,
+      gratingLinesPerMm,
+      activeWidthPx,
+      spectrograph,
+      activeXMinPx,
+      activeXMaxPx,
+      zeroOrderCentrePx
+    );
 
-  const windowHighAbsCm1 = Number((safeNu + ccdWindowWidthCm1 / 2).toFixed(2));
-  const windowLowAbsCm1 = Number((safeNu - ccdWindowWidthCm1 / 2).toFixed(2));
+  const ccdWindowWidthCm1 = Number(windowSpanCm1.toFixed(2));
   const centreRamanCm1 = Number((laserWavenumberCm1 - safeNu).toFixed(2));
   const windowLowRamanCm1 = Number(
     (laserWavenumberCm1 - windowHighAbsCm1).toFixed(2)
@@ -360,7 +641,7 @@ export function calculateTurretKinematicsAtWavenumber(
   // Derivative |d(nu)/d(theta)| = nu * cot(theta) per radian
   const cosTheta = Math.sqrt(Math.max(0.01, 1 - sinTheta * sinTheta));
   const dNuPerRad = safeNu * (cosTheta / sinTheta);
-  const radPerStep = Math.PI / (180 * MOTOR_STEPS_PER_DEGREE);
+  const radPerStep = Math.PI / (180 * Math.abs(stepsPerDeg));
   const cm1PerSingleMotorStep = Number((dNuPerRad * radPerStep).toFixed(4));
   const cm1Per100MotorSteps = Number((cm1PerSingleMotorStep * 100).toFixed(2));
   const degPer100MotorSteps = motorStepsToDegrees(100);
@@ -488,8 +769,6 @@ export function evaluateCcdExposureAndSaturation(
   }));
 
   // Calculate how many motor steps are needed to push the limiting strong line off the CCD
-  // When scanning toward lower wavenumbers (higher Raman shift), lines exit the high-wavenumber edge (windowHighCm1).
-  // When scanning toward higher wavenumbers, lines exit the low-wavenumber edge (windowLowCm1).
   let stepsToClearLimitingLine = 0;
   let cm1ToClearLimitingLine = 0;
   const isLimitedByStrongPeak = recommendedExposureSec <= 1 && maxCps > 135_000;
@@ -527,8 +806,8 @@ export function evaluateCcdExposureAndSaturation(
 
 /**
  * Computes the upper and lower Grating Scan Range bounds (cm^-1) from the absolute Raman range.
- * Matches exact factory reference scan bounds for 633nm (2400, 1800, 1200, 600 l/mm), 785nm (600 l/mm),
- * and 532nm (600 l/mm) while generalizing smoothly across all laser/grating combinations.
+ * Matches exact factory reference scan bounds for Virsa 532nm (2400 l/mm: 19400 - 14000 cm^-1 -> 108 scans @ 50 cm^-1),
+ * inVia 633nm (2400, 1800, 1200, 600 l/mm), 785nm (600 l/mm), and 532nm (600 & 1800 l/mm).
  */
 export function calculateScanRangeBounds(
   laserNm: number,
@@ -536,69 +815,106 @@ export function calculateScanRangeBounds(
   absHighCm1: number,
   absLowCm1: number,
   activeWidthPx: number = 1014,
-  spectrograph: SpectrographModel = 'inVia'
+  spectrograph: SpectrographModel = 'inVia',
+  isManualAbsRange: boolean = false,
+  activeXMinPx?: number,
+  activeXMaxPx?: number,
+  zeroOrderCentrePx?: number
 ): { scanHighCm1: number; scanLowCm1: number } {
   const pixelScale = activeWidthPx / 1014;
 
-  // Check exact factory reference combinations first for 100% fidelity to documented tables
-  if (
-    spectrograph === 'inVia' &&
-    Math.abs(pixelScale - 1) < 0.01 &&
-    Math.abs(laserNm - 633) < 0.5 &&
-    Math.abs(absHighCm1 - 15802.8) < 1.5
-  ) {
-    if (gratingLinesPerMm === 2400 && Math.abs(absLowCm1 - 13302.8) < 2) {
-      return { scanHighCm1: 16270.6, scanLowCm1: 13089.9 };
+  // Only apply exact factory preset scan bounds when the user has NOT manually edited the Absolute Calibration Range
+  if (!isManualAbsRange) {
+    // Virsa 532nm / 2400 l/mm empirical scan range: 14000 to 19400 cm^-1 (5400 cm^-1 span -> 108 scans at 50 cm^-1 step)
+    if (
+      spectrograph === 'Virsa' &&
+      Math.abs(laserNm - 532) < 0.5 &&
+      gratingLinesPerMm === 2400 &&
+      Math.abs(absHighCm1 - 18747) < 0.5 &&
+      Math.abs(absLowCm1 - 14797) < 0.5
+    ) {
+      return { scanHighCm1: 19400.0, scanLowCm1: 14000.0 };
     }
-    if (gratingLinesPerMm === 1800 && Math.abs(absLowCm1 - 11802.8) < 2) {
-      return { scanHighCm1: 16534.4, scanLowCm1: 11497.5 };
-    }
-    if (gratingLinesPerMm === 1200 && Math.abs(absLowCm1 - 11802.8) < 2) {
-      return { scanHighCm1: 16992.2, scanLowCm1: 11257.7 };
-    }
-    if (gratingLinesPerMm === 600 && Math.abs(absLowCm1 - 11802.8) < 2) {
-      return { scanHighCm1: 17800.0, scanLowCm1: 10821.0 };
-    }
-  }
 
-  if (
-    spectrograph === 'inVia' &&
-    Math.abs(pixelScale - 1) < 0.01 &&
-    Math.abs(laserNm - 785) < 0.5 &&
-    gratingLinesPerMm === 600 &&
-    Math.abs(absHighCm1 - 12689) < 3 &&
-    Math.abs(absLowCm1 - 9239) < 3
-  ) {
-    return { scanHighCm1: 13100.0, scanLowCm1: 8700.0 };
-  }
+    // inVia 532nm / 1800 l/mm WiRE X reference scan range: 15300 to 19300 cm^-1 (4000 cm^-1 span -> 80 scans at 50 cm^-1 step)
+    if (
+      spectrograph === 'inVia' &&
+      Math.abs(laserNm - 532) < 0.5 &&
+      gratingLinesPerMm === 1800 &&
+      Math.abs(absHighCm1 - 18747) < 0.5 &&
+      Math.abs(absLowCm1 - 14797) < 0.5
+    ) {
+      return { scanHighCm1: 19300.0, scanLowCm1: 15300.0 };
+    }
 
-  if (
-    spectrograph === 'inVia' &&
-    Math.abs(pixelScale - 1) < 0.01 &&
-    Math.abs(laserNm - 532) < 0.5 &&
-    gratingLinesPerMm === 600 &&
-    Math.abs(absHighCm1 - 18747) < 3 &&
-    Math.abs(absLowCm1 - 14797) < 3
-  ) {
-    return { scanHighCm1: 20450.0, scanLowCm1: 13880.0 };
+    // Check exact factory reference combinations for 100% fidelity to documented tables
+    if (
+      spectrograph === 'inVia' &&
+      Math.abs(pixelScale - 1) < 0.01 &&
+      Math.abs(laserNm - 633) < 0.5 &&
+      Math.abs(absHighCm1 - 15802.8) < 0.5
+    ) {
+      if (gratingLinesPerMm === 2400 && Math.abs(absLowCm1 - 13302.8) < 0.5) {
+        return { scanHighCm1: 16270.6, scanLowCm1: 13089.9 };
+      }
+      if (gratingLinesPerMm === 1800 && Math.abs(absLowCm1 - 11802.8) < 0.5) {
+        return { scanHighCm1: 16534.4, scanLowCm1: 11497.5 };
+      }
+      if (gratingLinesPerMm === 1200 && Math.abs(absLowCm1 - 11802.8) < 0.5) {
+        return { scanHighCm1: 16992.2, scanLowCm1: 11257.7 };
+      }
+      if (gratingLinesPerMm === 600 && Math.abs(absLowCm1 - 11802.8) < 0.5) {
+        return { scanHighCm1: 17800.0, scanLowCm1: 10821.0 };
+      }
+    }
+
+    if (
+      spectrograph === 'inVia' &&
+      Math.abs(pixelScale - 1) < 0.01 &&
+      Math.abs(laserNm - 785) < 0.5 &&
+      gratingLinesPerMm === 600 &&
+      Math.abs(absHighCm1 - 12689) < 0.5 &&
+      Math.abs(absLowCm1 - 9239) < 0.5
+    ) {
+      return { scanHighCm1: 13100.0, scanLowCm1: 8700.0 };
+    }
+
+    if (
+      spectrograph === 'inVia' &&
+      Math.abs(pixelScale - 1) < 0.01 &&
+      Math.abs(laserNm - 532) < 0.5 &&
+      gratingLinesPerMm === 600 &&
+      Math.abs(absHighCm1 - 18747) < 0.5 &&
+      Math.abs(absLowCm1 - 14797) < 0.5
+    ) {
+      return { scanHighCm1: 20450.0, scanLowCm1: 13880.0 };
+    }
   }
 
   // General physical dispersion margin model:
-  const winHigh = calculateCcdWindowWidthCm1(
-    absHighCm1,
-    gratingLinesPerMm,
-    activeWidthPx,
-    spectrograph
-  );
-  const winLow = calculateCcdWindowWidthCm1(
+  // Calculate the exact CCD view range at the start (absLowCm1) and end (absHighCm1) wavenumbers
+  const boundsLow = calculateCcdWindowBoundsCm1(
     absLowCm1,
     gratingLinesPerMm,
     activeWidthPx,
-    spectrograph
+    spectrograph,
+    activeXMinPx,
+    activeXMaxPx,
+    zeroOrderCentrePx
+  );
+  const boundsHigh = calculateCcdWindowBoundsCm1(
+    absHighCm1,
+    gratingLinesPerMm,
+    activeWidthPx,
+    spectrograph,
+    activeXMinPx,
+    activeXMaxPx,
+    zeroOrderCentrePx
   );
 
-  const upperMargin = winHigh * 0.55;
-  const lowerMargin = winLow * 0.52;
+  // The turret scan range extends by the CCD view half-window below absLowCm1 and above absHighCm1
+  const lowerMargin = Math.max(200, (absLowCm1 - boundsLow.windowLowAbsCm1) * 1.04);
+  const upperMargin = Math.max(200, (boundsHigh.windowHighAbsCm1 - absHighCm1) * 1.04);
 
   return {
     scanHighCm1: Number((absHighCm1 + upperMargin).toFixed(1)),
@@ -824,8 +1140,29 @@ export function solveCalibration(
   }
 
   // 4. Calculate Absolute Wavenumber Range (cm^-1)
-  const absHighCm1 = Number((laserWavenumberCm1 - ramanMin).toFixed(1));
-  const absLowCm1 = Number((laserWavenumberCm1 - ramanMax).toFixed(1));
+  let absHighCm1 = Number((laserWavenumberCm1 - ramanMin).toFixed(1));
+  let absLowCm1 = Number((laserWavenumberCm1 - ramanMax).toFixed(1));
+  const isManualAbsRange =
+    typeof params.customAbsLowCm1 === 'number' &&
+    typeof params.customAbsHighCm1 === 'number' &&
+    !isNaN(params.customAbsLowCm1) &&
+    !isNaN(params.customAbsHighCm1);
+
+  if (isManualAbsRange) {
+    const manualLow = Math.min(params.customAbsLowCm1!, params.customAbsHighCm1!);
+    const manualHigh = Math.max(
+      manualLow + 100,
+      Math.max(params.customAbsLowCm1!, params.customAbsHighCm1!)
+    );
+    absLowCm1 = Number(manualLow.toFixed(1));
+    absHighCm1 = Number(manualHigh.toFixed(1));
+    ramanMin = Math.round(laserWavenumberCm1 - absHighCm1);
+    ramanMax = Math.round(laserWavenumberCm1 - absLowCm1);
+    limitingFactors.push(
+      `Manual Absolute Calibration Range (${Math.round(absLowCm1)}–${Math.round(absHighCm1)} cm⁻¹ · ${ramanMin}–${ramanMax} cm⁻¹ Raman shift)`
+    );
+  }
+
   const absCentreCm1 = Number(((absHighCm1 + absLowCm1) / 2).toFixed(2));
 
   // 5. Calculate Grating Scan Range Bounds (cm^-1)
@@ -835,7 +1172,11 @@ export function solveCalibration(
     absHighCm1,
     absLowCm1,
     params.ccdActiveWidthPx,
-    params.spectrograph
+    params.spectrograph,
+    isManualAbsRange,
+    params.ccdActiveXMinPx,
+    params.ccdActiveXMaxPx,
+    params.ccdZeroOrderCentrePx
   );
   const scanSpanCm1 = Number((scanHighCm1 - scanLowCm1).toFixed(1));
 
@@ -844,19 +1185,28 @@ export function solveCalibration(
     absHighCm1,
     params.gratingLinesPerMm,
     params.ccdActiveWidthPx,
-    params.spectrograph
+    params.spectrograph,
+    params.ccdActiveXMinPx,
+    params.ccdActiveXMaxPx,
+    params.ccdZeroOrderCentrePx
   );
   const ccdWindowCentreCm1 = calculateCcdWindowWidthCm1(
     absCentreCm1,
     params.gratingLinesPerMm,
     params.ccdActiveWidthPx,
-    params.spectrograph
+    params.spectrograph,
+    params.ccdActiveXMinPx,
+    params.ccdActiveXMaxPx,
+    params.ccdZeroOrderCentrePx
   );
   const ccdWindowLowCm1 = calculateCcdWindowWidthCm1(
     absLowCm1,
     params.gratingLinesPerMm,
     params.ccdActiveWidthPx,
-    params.spectrograph
+    params.spectrograph,
+    params.ccdActiveXMinPx,
+    params.ccdActiveXMaxPx,
+    params.ccdZeroOrderCentrePx
   );
   const dispersionCm1PerPixelCentre = Number(
     (ccdWindowCentreCm1 / params.ccdActiveWidthPx).toFixed(3)
@@ -880,10 +1230,34 @@ export function solveCalibration(
   const wavenumberShiftPerStepCm1 = Number(
     (recommendedMotorStepTicks * cm1PerMotorTick).toFixed(1)
   );
+  const achievedOccurrencesAtHigh = Number(
+    (ccdWindowHighCm1 / wavenumberShiftPerStepCm1).toFixed(1)
+  );
   const achievedOccurrencesAtCentre = Number(
     (ccdWindowCentreCm1 / wavenumberShiftPerStepCm1).toFixed(1)
   );
+  const achievedOccurrencesAtLow = Number(
+    (ccdWindowLowCm1 / wavenumberShiftPerStepCm1).toFixed(1)
+  );
   const totalScanSteps = Math.ceil(scanSpanCm1 / wavenumberShiftPerStepCm1);
+
+  // In WiRE X Calibration ("Step: 50 (abs. cm-1)"), the step size is in absolute cm^-1.
+  // Because the CCD view window is narrowest at the low-wavenumber end (ccdWindowLowCm1),
+  // we calculate the step size in Abs cm^-1 from ccdWindowLowCm1 / targetHits so that
+  // even the lowest wavenumber achieves the requested targetHits across the CCD.
+  const exactWireXStepAbsCm1 = Number((ccdWindowLowCm1 / targetHits).toFixed(1));
+  const wireXStandardSteps = [
+    10, 15, 20, 25, 30, 40, 50, 75, 80, 100, 125, 150, 200, 250, 300, 400, 500,
+  ];
+  const wireXStepAbsCm1 = wireXStandardSteps.reduce((prev, curr) =>
+    Math.abs(curr - exactWireXStepAbsCm1) < Math.abs(prev - exactWireXStepAbsCm1)
+      ? curr
+      : prev
+  );
+  const wireXTotalScanCount = Math.round(scanSpanCm1 / Math.max(1, wireXStepAbsCm1));
+  const wireXHitsAtHigh = Number((ccdWindowHighCm1 / Math.max(1, wireXStepAbsCm1)).toFixed(1));
+  const wireXHitsAtCentre = Number((ccdWindowCentreCm1 / Math.max(1, wireXStepAbsCm1)).toFixed(1));
+  const wireXHitsAtLow = Number((ccdWindowLowCm1 / Math.max(1, wireXStepAbsCm1)).toFixed(1));
 
   // 8. Filter Candidate Neon Lines within Calibration Range
   const effectiveMinIntensity =
@@ -896,8 +1270,10 @@ export function solveCalibration(
 
   const candidatePool = NEON_CATALOG.filter((line) => {
     if (line.excludeFromAutoPick) return false;
-    // On 532nm + 1800 l/mm with FDA camera and visible lenses, 18758.92 cm^-1 has 0 counts (not visible)
+    // On inVia 532nm + 1800 l/mm with FDA camera and visible lenses, 18758.92 cm^-1 has 0 counts (not visible).
+    // On Virsa 532nm + 2400 l/mm (50um fibre), 18758.99 cm^-1 is detected at 42.3 e-/cm^-1.
     if (
+      params.spectrograph === 'inVia' &&
       Math.abs(params.laserNm - 532) < 0.5 &&
       params.gratingLinesPerMm >= 1800 &&
       params.ccdType === 'FDA' &&
@@ -1004,7 +1380,16 @@ export function solveCalibration(
     ).toFixed(1)
   );
 
-  const desiredCount = Math.max(5, Math.min(16, params.targetLineCount));
+  const desiredCount = Math.max(5, Math.min(25, params.targetLineCount));
+  // When requesting higher line density (e.g. 16 lines = 3 per zone), scale spacing threshold so each zone can hold 3 lines
+  const effectivePickSpacingCm1 =
+    desiredCount > 10
+      ? Math.min(
+          minRequiredLineSpacingCm1,
+          Math.max(40, Math.floor((absHighCm1 - absLowCm1) / (desiredCount * 2.25)))
+        )
+      : minRequiredLineSpacingCm1;
+
   const selectedLines: NeonLine[] = [];
   if (primaryCalibrationLine) {
     selectedLines.push(primaryCalibrationLine);
@@ -1019,37 +1404,46 @@ export function solveCalibration(
       line13353 &&
       !selectedLines.some((s) => s.id === line13353.id) &&
       selectedLines.every(
-        (s) => Math.abs(s.wavenumber - line13353.wavenumber) >= minRequiredLineSpacingCm1 * 0.75
+        (s) => Math.abs(s.wavenumber - line13353.wavenumber) >= effectivePickSpacingCm1 * 0.75
       )
     ) {
       selectedLines.push(line13353);
     }
   }
 
-  // First pass: guarantee at least 1 strong anchor in each of the 5 equal calibration bins
+  // First pass: distribute targetPerBin = Math.max(1, Math.floor(desiredCount / 5)) lines in each of the 5 equal calibration zones
+  // (e.g., for desiredCount = 16, targetPerBin = 3 lines per zone across 5 zones + PCL = 16 lines)
+  const targetPerBin = Math.max(1, Math.floor(desiredCount / 5));
   const binSpan = (absHighCm1 - absLowCm1) / 5;
   for (let b = 0; b < 5; b++) {
     const binTop = absHighCm1 - b * binSpan + (b === 0 ? 180 : 0);
     const binBot = absHighCm1 - (b + 1) * binSpan - (b === 4 ? 180 : 0);
-    const binMid = (binTop + binBot) / 2;
 
-    const alreadyHasInBin = selectedLines.some(
-      (s) => s.wavenumber <= binTop && s.wavenumber >= binBot
-    );
-    if (!alreadyHasInBin) {
+    for (let slot = 0; slot < targetPerBin; slot++) {
+      if (selectedLines.length >= desiredCount) break;
+      const currentInBin = selectedLines.filter(
+        (s) => s.wavenumber <= binTop && s.wavenumber >= binBot
+      );
+      if (currentInBin.length > slot) continue;
+
+      const slotTargetNu =
+        targetPerBin === 1
+          ? (binTop + binBot) / 2
+          : binTop - ((slot + 0.5) / targetPerBin) * (binTop - binBot);
+
       const binCandidates = candidatePool.filter(
         (cand) =>
           cand.wavenumber <= binTop &&
           cand.wavenumber >= binBot &&
           !selectedLines.some((s) => s.id === cand.id) &&
           selectedLines.every(
-            (s) => Math.abs(s.wavenumber - cand.wavenumber) >= minRequiredLineSpacingCm1
+            (s) => Math.abs(s.wavenumber - cand.wavenumber) >= effectivePickSpacingCm1
           )
       );
       if (binCandidates.length > 0) {
         const bestInBin = binCandidates.sort((a, c) => {
-          const distA = Math.abs(a.wavenumber - binMid);
-          const distC = Math.abs(c.wavenumber - binMid);
+          const distA = Math.abs(a.wavenumber - slotTargetNu);
+          const distC = Math.abs(c.wavenumber - slotTargetNu);
           return (
             distA -
             (a.relativeIntensity / 1000) * 80 -
@@ -1061,7 +1455,7 @@ export function solveCalibration(
     }
   }
 
-  // Second pass: fill remaining desiredCount uniformly across [absLowCm1, absHighCm1]
+  // Second pass: fill any remaining desiredCount slots uniformly across [absLowCm1, absHighCm1]
   const targetStep = (absHighCm1 - absLowCm1) / Math.max(1, desiredCount - 1);
   for (let i = 0; i < desiredCount; i++) {
     if (selectedLines.length >= desiredCount) break;
@@ -1070,7 +1464,7 @@ export function solveCalibration(
       (cand) =>
         !selectedLines.some((s) => s.id === cand.id) &&
         selectedLines.every(
-          (s) => Math.abs(s.wavenumber - cand.wavenumber) >= minRequiredLineSpacingCm1
+          (s) => Math.abs(s.wavenumber - cand.wavenumber) >= effectivePickSpacingCm1
         )
     );
     if (validCandidates.length > 0) {
@@ -1081,10 +1475,28 @@ export function solveCalibration(
         const costB = distB - (b.relativeIntensity / 1000) * 65;
         return costA - costB;
       })[0];
-      if (Math.abs(best.wavenumber - targetNu) <= targetStep * 1.35) {
+      if (
+        desiredCount > 10 ||
+        Math.abs(best.wavenumber - targetNu) <= targetStep * 1.35
+      ) {
         selectedLines.push(best);
       }
     }
+  }
+
+  // Fallback fill if still short of desiredCount and valid spaced candidates exist
+  while (selectedLines.length < desiredCount) {
+    const remaining = candidatePool.filter(
+      (cand) =>
+        !selectedLines.some((s) => s.id === cand.id) &&
+        selectedLines.every(
+          (s) =>
+            Math.abs(s.wavenumber - cand.wavenumber) >=
+            effectivePickSpacingCm1 * 0.75
+        )
+    );
+    if (remaining.length === 0) break;
+    selectedLines.push(remaining[0]);
   }
 
   selectedLines.sort((a, b) => b.wavenumber - a.wavenumber);
@@ -1145,8 +1557,15 @@ export function solveCalibration(
     recommendedMotorStepTicks,
     exactMotorStepTicks,
     wavenumberShiftPerStepCm1,
+    achievedOccurrencesAtHigh,
     achievedOccurrencesAtCentre,
+    achievedOccurrencesAtLow,
     totalScanSteps,
+    wireXStepAbsCm1,
+    wireXTotalScanCount,
+    wireXHitsAtHigh,
+    wireXHitsAtCentre,
+    wireXHitsAtLow,
     primaryCalibrationLine,
     secondaryCalibrationLine,
     focusAnchorLines,

@@ -1,6 +1,7 @@
 import { NEON_CATALOG, NeonLine } from './neonCatalog';
 import {
   BinDistribution,
+  calculateCcdWindowBoundsCm1,
   CalibrationParameters,
   CalibrationSolution,
   computeBinUniformity,
@@ -8,6 +9,12 @@ import {
   LineConfusionPair,
   solveCalibration,
 } from './physicsEngine';
+import {
+  analyzeSpectralLineBatch,
+  analyzeSpectralLineOrigin,
+  BatchSpectralOriginSummary,
+  SpectralLineOriginAnalysis,
+} from './spectralImpurityAnalyzer';
 
 export interface ParsedLineEntry {
   rawLineNumber: number;
@@ -15,6 +22,7 @@ export interface ParsedLineEntry {
   wavenumberCm1: number;
   matchedCatalogLine: NeonLine | null;
   catalogDeltaCm1: number | null;
+  originAnalysis: SpectralLineOriginAnalysis;
   declaredRole?: 'PCL' | '2ND' | 'STANDARD';
   declaredIntensity?: number;
   declaredExposureSec?: number;
@@ -62,6 +70,7 @@ export interface FileAuditReport {
   };
   parsedLines: ParsedLineEntry[];
   matchedLines: NeonLine[];
+  spectralOriginSummary: BatchSpectralOriginSummary;
   overallStatus: 'PASS' | 'WARN' | 'FAIL';
   passCount: number;
   warnCount: number;
@@ -71,6 +80,17 @@ export interface FileAuditReport {
   uploadedUniformityScore: number;
   uploadedConfusionRisks: LineConfusionPair[];
   achievedOccurrencesPerLine: number;
+  lowestLineAnalysis: {
+    lowestWavenumberCm1: number;
+    highestWavenumberCm1: number;
+    ccdWindowAtLowestCm1: number;
+    ccdWindowAtHighestCm1: number;
+    exactStepCm1ForTargetHits: number;
+    recommendedStepCm1AtLowest: number;
+    achievedHitsAtLowestWithRecommendedStep: number;
+    achievedHitsAtLowestWithCurrentStep: number;
+    totalScansWithLowestStep: number;
+  } | null;
   solution: CalibrationSolution;
 }
 
@@ -277,17 +297,36 @@ export function auditCalibrationFile(
 
     const issueMessages: string[] = [];
     let status: 'valid' | 'warning' | 'error' = 'valid';
+    const originAnalysis = analyzeSpectralLineOrigin(
+      wavenumberCm1,
+      declaredIntensity
+    );
 
     if (!matchedCatalogLine) {
       status = 'error';
-      issueMessages.push(
-        `No known Neon I emission line within ±3.5 cm⁻¹ (closest is ${closestCat?.wavenumber.toFixed(2)} cm⁻¹, Δ=${catalogDeltaCm1} cm⁻¹).`
-      );
+      if (
+        originAnalysis.classification === 'second_order_diffraction' ||
+        originAnalysis.classification === 'third_order_diffraction' ||
+        originAnalysis.classification === 'trace_gas_impurity'
+      ) {
+        issueMessages.push(originAnalysis.explanation);
+      } else {
+        issueMessages.push(
+          `No known Neon I emission line within ±3.5 cm⁻¹ (closest is ${closestCat?.wavenumber.toFixed(2)} cm⁻¹, Δ=${catalogDeltaCm1} cm⁻¹).`
+        );
+      }
     } else if (Math.abs(catalogDeltaCm1 || 0) > 1.2) {
       status = 'warning';
       issueMessages.push(
         `Wavenumber deviates by ${catalogDeltaCm1} cm⁻¹ from NIST reference (${matchedCatalogLine.wavenumber.toFixed(2)} cm⁻¹).`
       );
+    }
+
+    if (
+      matchedCatalogLine &&
+      originAnalysis.classification === 'trace_gas_impurity'
+    ) {
+      issueMessages.push(originAnalysis.explanation);
     }
 
     // Check for 0-count / unobservable line (e.g. 18758.990 with 0 counts on 1800 grating with FDA camera & visible lenses)
@@ -351,6 +390,7 @@ export function auditCalibrationFile(
       wavenumberCm1,
       matchedCatalogLine,
       catalogDeltaCm1,
+      originAnalysis,
       declaredRole,
       declaredIntensity,
       declaredExposureSec: effectiveExposureSec,
@@ -712,12 +752,77 @@ export function auditCalibrationFile(
   const overallStatus =
     failCount > 0 ? 'FAIL' : warnCount > 0 ? 'WARN' : 'PASS';
 
+  // Compute lowest-wavenumber line CCD window and required step size for target hits/line
+  let lowestLineAnalysis: FileAuditReport['lowestLineAnalysis'] = null;
+  if (sortedParsed.length > 0) {
+    const lowestWavenumberCm1 =
+      sortedParsed[sortedParsed.length - 1].wavenumberCm1;
+    const highestWavenumberCm1 = sortedParsed[0].wavenumberCm1;
+    const boundsAtLowest = calculateCcdWindowBoundsCm1(
+      lowestWavenumberCm1,
+      params.gratingLinesPerMm,
+      params.ccdActiveWidthPx,
+      params.spectrograph,
+      params.ccdActiveXMinPx,
+      params.ccdActiveXMaxPx,
+      params.ccdZeroOrderCentrePx
+    );
+    const boundsAtHighest = calculateCcdWindowBoundsCm1(
+      highestWavenumberCm1,
+      params.gratingLinesPerMm,
+      params.ccdActiveWidthPx,
+      params.spectrograph,
+      params.ccdActiveXMinPx,
+      params.ccdActiveXMaxPx,
+      params.ccdZeroOrderCentrePx
+    );
+    const ccdWindowAtLowestCm1 = Number(boundsAtLowest.windowSpanCm1.toFixed(1));
+    const ccdWindowAtHighestCm1 = Number(
+      boundsAtHighest.windowSpanCm1.toFixed(1)
+    );
+    const targetHits = Math.max(2, params.targetOccurrencesPerLine);
+    const exactStepCm1ForTargetHits = Number(
+      (ccdWindowAtLowestCm1 / targetHits).toFixed(1)
+    );
+    const standardSteps = [10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 100, 125, 150];
+    const recommendedStepCm1AtLowest = standardSteps.reduce((prev, curr) =>
+      Math.abs(curr - exactStepCm1ForTargetHits) <
+      Math.abs(prev - exactStepCm1ForTargetHits)
+        ? curr
+        : prev
+    );
+    const achievedHitsAtLowestWithRecommendedStep = Number(
+      (ccdWindowAtLowestCm1 / recommendedStepCm1AtLowest).toFixed(1)
+    );
+    const achievedHitsAtLowestWithCurrentStep = Number(
+      (ccdWindowAtLowestCm1 / Math.max(1, solution.wireXStepAbsCm1)).toFixed(1)
+    );
+    const totalScansWithLowestStep = Math.round(
+      solution.scanSpanCm1 / Math.max(1, recommendedStepCm1AtLowest)
+    );
+
+    lowestLineAnalysis = {
+      lowestWavenumberCm1,
+      highestWavenumberCm1,
+      ccdWindowAtLowestCm1,
+      ccdWindowAtHighestCm1,
+      exactStepCm1ForTargetHits,
+      recommendedStepCm1AtLowest,
+      achievedHitsAtLowestWithRecommendedStep,
+      achievedHitsAtLowestWithCurrentStep,
+      totalScansWithLowestStep,
+    };
+  }
+
+  const spectralOriginSummary = analyzeSpectralLineBatch(parsedLines);
+
   return {
     fileName,
     rawContent,
     detectedHeaders,
     parsedLines,
     matchedLines,
+    spectralOriginSummary,
     overallStatus,
     passCount,
     warnCount,
@@ -727,6 +832,7 @@ export function auditCalibrationFile(
     uploadedUniformityScore,
     uploadedConfusionRisks,
     achievedOccurrencesPerLine: achievedOccurrences,
+    lowestLineAnalysis,
     solution,
   };
 }

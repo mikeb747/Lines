@@ -2,9 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyCcdArchitecture,
+  applySpectrographModel,
+  calculateCcdWindowBoundsCm1,
   calculateCcdWindowWidthCm1,
   calculateFilterTransmissionPct,
   CalibrationParameters,
+  EMPIRICAL_VIRSA_2400_WINDOWS,
   evaluateCcdExposureAndSaturation,
   getLaserWavenumberCm1,
   motorStepsToDegrees,
@@ -254,4 +257,269 @@ test('Empirical 1800 l/mm grating motor steps, degrees, CCD view compression, an
   );
 });
 
+test('Empirical Virsa 532nm 2400 l/mm 50um fibre matches all 12 asymmetric CCD view windows, 14000-19400 cm-1 (108 scans @ 50 cm-1 step), and 29 post-calibration lines', () => {
+  const virsaParams = applySpectrographModel(
+    { ...BASE_PARAMS, laserNm: 532, gratingLinesPerMm: 2400 },
+    'Virsa'
+  );
+  // Default active X range is now 18 to 1032 (1014 active pixels) for all systems
+  assert.equal(virsaParams.ccdActiveXMinPx, 18);
+  assert.equal(virsaParams.ccdActiveXMaxPx, 1032);
+  assert.equal(virsaParams.ccdActiveWidthPx, 1014);
+  assert.equal(virsaParams.ccdActiveHeightPx, 20);
+
+  const solVirsa = solveCalibration(virsaParams);
+  assert.equal(solVirsa.scanHighCm1, 19400.0);
+  assert.equal(solVirsa.scanLowCm1, 14000.0);
+  assert.equal(solVirsa.scanSpanCm1, 5400.0);
+  assert.equal(solVirsa.wireXStepAbsCm1, 50);
+  assert.equal(solVirsa.wireXTotalScanCount, 108);
+  assert.equal(solVirsa.focusAnchorLines.length, 0); // Virsa has 1 movable lens
+
+  // Verify all 12 empirical Virsa 532nm / 2400 l/mm asymmetric CCD view windows match within 0.5 cm^-1 (measured at X 10..1030, 1020 px)
+  for (const bm of EMPIRICAL_VIRSA_2400_WINDOWS) {
+    const bounds = calculateCcdWindowBoundsCm1(
+      bm.centreAbsCm1,
+      2400,
+      1020,
+      'Virsa',
+      10,
+      1030,
+      517
+    );
+    assert.ok(
+      Math.abs(bounds.windowLowAbsCm1 - bm.viewLowAbsCm1) < 0.5,
+      `Centre ${bm.centreAbsCm1}: expected low ${bm.viewLowAbsCm1}, got ${bounds.windowLowAbsCm1}`
+    );
+    assert.ok(
+      Math.abs(bounds.windowHighAbsCm1 - bm.viewHighAbsCm1) < 0.5,
+      `Centre ${bm.centreAbsCm1}: expected high ${bm.viewHighAbsCm1}, got ${bounds.windowHighAbsCm1}`
+    );
+  }
+
+  // Verify default active X range 18 to 1032 (1014 px) with 517 as centre pixel
+  const bounds18_1032 = calculateCcdWindowBoundsCm1(
+    17086.75,
+    2400,
+    1014,
+    'Virsa',
+    18,
+    1032,
+    517
+  );
+  assert.equal(bounds18_1032.windowLowAbsCm1, 16437.37);
+  assert.equal(bounds18_1032.windowHighAbsCm1, 17837.87);
+
+  // Verify manual override of Absolute Calibration Range recalculates Grating Turret Scan Range, Centre, and Raman Shift
+  // and does NOT snap numbers between 14738 and 14856 back to 14000
+  const sol14397 = solveCalibration({
+    ...virsaParams,
+    customAbsLowCm1: 14397,
+    customAbsHighCm1: 18747,
+  });
+  const sol14737 = solveCalibration({
+    ...virsaParams,
+    customAbsLowCm1: 14737,
+    customAbsHighCm1: 18747,
+  });
+  const sol14738 = solveCalibration({
+    ...virsaParams,
+    customAbsLowCm1: 14738,
+    customAbsHighCm1: 18747,
+  });
+  const sol14856 = solveCalibration({
+    ...virsaParams,
+    customAbsLowCm1: 14856,
+    customAbsHighCm1: 18747,
+  });
+  const sol14857 = solveCalibration({
+    ...virsaParams,
+    customAbsLowCm1: 14857,
+    customAbsHighCm1: 18747,
+  });
+  assert.equal(Math.round(sol14397.scanLowCm1), 14000);
+  assert.equal(Math.round(sol14737.scanLowCm1), 14306);
+  assert.equal(Math.round(sol14738.scanLowCm1), 14307);
+  assert.equal(Math.round(sol14856.scanLowCm1), 14413);
+  assert.equal(Math.round(sol14857.scanLowCm1), 14414);
+
+  const solCustomAbs = solveCalibration({
+    ...virsaParams,
+    customAbsLowCm1: 14431,
+    customAbsHighCm1: 18517,
+  });
+  assert.equal(solCustomAbs.absLowCm1, 14431);
+  assert.equal(solCustomAbs.absHighCm1, 18517);
+  assert.equal(Math.round(solCustomAbs.absCentreCm1), 16474);
+  assert.ok(solCustomAbs.scanLowCm1 < 14431);
+  assert.ok(solCustomAbs.scanHighCm1 > 18517);
+
+  // Audit the 29-line empirical Virsa 532nm 2400 preset and verify lowest-line step calculation
+  const virsaPreset = FACTORY_PRESETS.find(
+    (p) => p.id === 'virsa-532-2400-empirical'
+  )!;
+  assert.equal(virsaPreset.params.spectrograph, 'Virsa');
+  assert.equal(virsaPreset.params.laserNm, 532);
+  assert.equal(virsaPreset.params.gratingLinesPerMm, 2400);
+  assert.equal(virsaPreset.params.targetLineCount, 16);
+  assert.equal(virsaPreset.params.targetOccurrencesPerLine, 16);
+  assert.equal(virsaPreset.params.minRelativeIntensity, 1);
+  assert.equal(virsaPreset.params.ccdZeroOrderCentrePx, 517);
+  assert.equal(
+    applySpectrographModel(BASE_PARAMS, 'inVia').ccdZeroOrderCentrePx,
+    517
+  );
+
+  const auditVirsa = auditCalibrationFile(
+    virsaPreset.sampleFileName,
+    virsaPreset.sampleFileContent,
+    virsaPreset.params
+  );
+  assert.equal(auditVirsa.parsedLines.length, 29);
+  assert.equal(auditVirsa.solution.selectedLines.length, 16);
+  for (const bin of auditVirsa.solution.binDistribution) {
+    assert.ok(
+      bin.count >= 3,
+      `Zone ${bin.binIndex} should have at least 3 lines, got ${bin.count}`
+    );
+  }
+  assert.ok(auditVirsa.lowestLineAnalysis !== null);
+  assert.equal(auditVirsa.lowestLineAnalysis?.lowestWavenumberCm1, 14430.7);
+  assert.equal(auditVirsa.lowestLineAnalysis?.recommendedStepCm1AtLowest, 50);
+
+  // Test lowest wavenumber 14430.70 cm^-1 uploaded file step-size calculation for 16 hits vs 10 hits
+  const customAudit14430 = auditCalibrationFile(
+    'custom_14430.txt',
+    '14430.70\n17086.75\n18516.59',
+    { ...virsaParams, targetOccurrencesPerLine: 16 }
+  );
+  assert.equal(
+    customAudit14430.lowestLineAnalysis?.lowestWavenumberCm1,
+    14430.7
+  );
+  assert.equal(
+    customAudit14430.lowestLineAnalysis?.recommendedStepCm1AtLowest,
+    50
+  );
+
+  const customAudit10Hits = auditCalibrationFile(
+    'custom_14430_10hits.txt',
+    '14430.70\n17086.75\n18516.59',
+    { ...virsaParams, targetOccurrencesPerLine: 10 }
+  );
+  assert.equal(
+    customAudit10Hits.lowestLineAnalysis?.exactStepCm1ForTargetHits,
+    84.4
+  );
+  assert.equal(
+    customAudit10Hits.lowestLineAnalysis?.recommendedStepCm1AtLowest,
+    80
+  );
+
+  // Verify automated spectral origin analysis on Virsa 29-line empirical dataset:
+  // All 29 lines are 1st-order Ne I (m=1): 28 authentic_ne1_first_order + 1 ne1_with_coincidental_overlap (17835.71 cm^-1)
+  assert.equal(auditVirsa.spectralOriginSummary.totalAnalyzed, 29);
+  assert.equal(auditVirsa.spectralOriginSummary.authenticNe1Count, 28);
+  assert.equal(auditVirsa.spectralOriginSummary.coincidentalOverlapCount, 1);
+  assert.equal(auditVirsa.spectralOriginSummary.secondOrderCount, 0);
+  assert.equal(auditVirsa.spectralOriginSummary.thirdOrderCount, 0);
+  assert.equal(auditVirsa.spectralOriginSummary.traceImpurityCount, 0);
+
+  const line15619 = auditVirsa.spectralOriginSummary.entries.find(
+    (e) => Math.abs(e.observedWavenumberCm1 - 15619.51) < 0.05
+  );
+  assert.ok(line15619);
+  assert.equal(line15619.classification, 'authentic_ne1_first_order');
+  assert.equal(line15619.diffractionOrder, 1);
+  assert.equal(line15619.primarySpecies, 'Ne I');
+  assert.ok(Math.abs((line15619.deltaFromNistAirCm1 ?? 99) - 0) <= 0.05);
+  assert.ok(
+    (line15619.nistWavenumberAirCm1 ?? 0) >
+      (line15619.nistWavenumberVacCm1 ?? 0),
+    'Air wavenumber should exceed vacuum wavenumber by index of refraction factor n_air ~ 1.000277'
+  );
+});
+
+test('Automated Spectral Impurity & Higher-Order Diffraction Analyzer flags m=2, m=3 diffraction ghosts and Ar I / Hg I trace gas lines', () => {
+  const virsaParams = applySpectrographModel(
+    { ...BASE_PARAMS, laserNm: 532, gratingLinesPerMm: 2400 },
+    'Virsa'
+  );
+
+  // Audit a mixed file containing authentic 1st-order Ne I, 2nd-order Ne I (344.770 nm -> 14502.42 cm-1),
+  // 2nd-order Ne II (332.374 nm -> 15043.30 cm-1), 3rd-order Hg I (253.652 nm -> 13141.37 cm-1),
+  // and trace Penning Argon I (696.543 nm -> 14356.61 cm-1 and 675.283 nm -> 14808.61 cm-1)
+  const mixedFileContent = [
+    '17086.75\t109074', // Authentic 1st-order Ne I PCL (585.249 nm)
+    '15619.51\t200222', // Authentic 1st-order Ne I (640.225 nm)
+    '15043.30\t420', // 2nd-order (m=2) Ne II 332.374 nm UV line
+    '14502.42\t880', // 2nd-order (m=2) Ne I 344.770 nm UV line
+    '14356.61\t1450', // 1st-order Trace Argon I 696.543 nm Penning gas line
+    '14808.40\t1626', // 1st-order Trace Argon I 675.283 nm Penning gas line (present in 1800 .lns)
+    '13141.37\t310', // 3rd-order (m=3) Hg I 253.652 nm UV line
+  ].join('\n');
+
+  const mixedAudit = auditCalibrationFile(
+    'mixed_orders_and_argon.txt',
+    mixedFileContent,
+    virsaParams
+  );
+
+  const summary = mixedAudit.spectralOriginSummary;
+  assert.equal(summary.totalAnalyzed, 7);
+  assert.equal(summary.authenticNe1Count, 2);
+  assert.equal(summary.secondOrderCount, 2);
+  assert.equal(summary.thirdOrderCount, 1);
+  assert.equal(summary.traceImpurityCount, 2);
+
+  const ne2SecondOrder = summary.entries.find(
+    (e) => Math.abs(e.observedWavenumberCm1 - 15043.3) < 0.1
+  );
+  assert.ok(ne2SecondOrder);
+  assert.equal(ne2SecondOrder.classification, 'second_order_diffraction');
+  assert.equal(ne2SecondOrder.diffractionOrder, 2);
+  assert.equal(ne2SecondOrder.primarySpecies, 'Ne II');
+  assert.ok(Math.abs((ne2SecondOrder.nistWavelengthAirNm ?? 0) - 332.374) < 0.05);
+
+  const ne1SecondOrder = summary.entries.find(
+    (e) => Math.abs(e.observedWavenumberCm1 - 14502.42) < 0.1
+  );
+  assert.ok(ne1SecondOrder);
+  assert.equal(ne1SecondOrder.classification, 'second_order_diffraction');
+  assert.equal(ne1SecondOrder.diffractionOrder, 2);
+  assert.equal(ne1SecondOrder.primarySpecies, 'Ne I');
+  assert.ok(Math.abs((ne1SecondOrder.nistWavelengthAirNm ?? 0) - 344.77) < 0.05);
+
+  const hgThirdOrder = summary.entries.find(
+    (e) => Math.abs(e.observedWavenumberCm1 - 13141.37) < 0.1
+  );
+  assert.ok(hgThirdOrder);
+  assert.equal(hgThirdOrder.classification, 'third_order_diffraction');
+  assert.equal(hgThirdOrder.diffractionOrder, 3);
+  assert.equal(hgThirdOrder.primarySpecies, 'Hg I');
+  assert.ok(Math.abs((hgThirdOrder.nistWavelengthAirNm ?? 0) - 253.652) < 0.05);
+
+  const ar696 = summary.entries.find(
+    (e) => Math.abs(e.observedWavenumberCm1 - 14356.61) < 0.1
+  );
+  assert.ok(ar696);
+  assert.equal(ar696.classification, 'trace_gas_impurity');
+  assert.equal(ar696.primarySpecies, 'Ar I');
+  assert.equal(ar696.diffractionOrder, 1);
+
+  // Verify the empirical 532nm_1800.lns file (which extends into the NIR down to 10474 cm^-1)
+  // has its Penning Argon lines (14808.4, 13542.7, 13326.3, 13097.2, 12322.2 cm^-1, etc.) flagged
+  const lnsPreset = FACTORY_PRESETS.find(
+    (p) => p.id === '532-1800-lns-empirical'
+  )!;
+  const auditLns = auditCalibrationFile(
+    lnsPreset.sampleFileName,
+    lnsPreset.sampleFileContent,
+    lnsPreset.params
+  );
+  assert.ok(
+    auditLns.spectralOriginSummary.traceImpurityCount >= 10,
+    `Expected >= 10 trace Ar I Penning gas lines in 532nm_1800.lns, got ${auditLns.spectralOriginSummary.traceImpurityCount}`
+  );
+});
 

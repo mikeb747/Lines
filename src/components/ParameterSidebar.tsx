@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   applyCcdArchitecture,
+  applySpectrographModel,
   CalibrationParameters,
   CCDArchitecture,
   FilterType,
@@ -31,6 +32,8 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   const [laserInputText, setLaserInputText] = React.useState<string>(
     String(params.laserNm)
   );
+  const [minIntensityInputText, setMinIntensityInputText] =
+    React.useState<string>(String(params.minRelativeIntensity));
 
   React.useEffect(() => {
     const parsedCurrent = parseFloat(laserInputText);
@@ -38,6 +41,16 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
       setLaserInputText(String(params.laserNm));
     }
   }, [params.laserNm]);
+
+  React.useEffect(() => {
+    const parsedCurrent = parseFloat(minIntensityInputText);
+    if (
+      isNaN(parsedCurrent) ||
+      Math.abs(parsedCurrent - params.minRelativeIntensity) > 1e-6
+    ) {
+      setMinIntensityInputText(String(params.minRelativeIntensity));
+    }
+  }, [params.minRelativeIntensity]);
 
   const update = <K extends keyof CalibrationParameters>(
     key: K,
@@ -107,7 +120,9 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               <button
                 key={model}
                 type="button"
-                onClick={() => update('spectrograph', model)}
+                onClick={() =>
+                  onChangeParams(applySpectrographModel(params, model))
+                }
                 className={`rounded-md py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
                   params.spectrograph === model
                     ? 'bg-white text-slate-900 shadow-xs'
@@ -301,7 +316,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             id="target-occurrences-slider"
             type="range"
             min={4}
-            max={16}
+            max={24}
             step={1}
             value={params.targetOccurrencesPerLine}
             onChange={(e) =>
@@ -310,9 +325,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             className="w-full accent-cyan-600"
           />
           <div className="flex justify-between text-[11px] font-mono text-slate-400">
-            <span>4 hits (100 steps)</span>
-            <span>8 hits (50 steps)</span>
-            <span>16 hits (25 steps)</span>
+            <span>4 hits/line</span>
+            <span>10 hits/line</span>
+            <span>16 hits/line (50 cm⁻¹)</span>
+            <span>24 hits</span>
           </div>
         </div>
 
@@ -348,18 +364,24 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             </label>
             <input
               id="min-intensity-input"
-              type="number"
-              min={100}
-              max={700}
-              step={20}
-              value={params.minRelativeIntensity}
-              onChange={(e) =>
-                update(
-                  'minRelativeIntensity',
-                  Math.max(100, parseInt(e.target.value, 10) || 280)
-                )
-              }
-              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
+              type="text"
+              inputMode="decimal"
+              value={minIntensityInputText}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setMinIntensityInputText(raw);
+                const val = parseFloat(raw);
+                if (!isNaN(val)) {
+                  update('minRelativeIntensity', val);
+                }
+              }}
+              onBlur={() => {
+                const val = parseFloat(minIntensityInputText);
+                if (isNaN(val)) {
+                  setMinIntensityInputText(String(params.minRelativeIntensity));
+                }
+              }}
+              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
             />
           </div>
         </div>
@@ -395,6 +417,108 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
           ))}
         </div>
 
+        <div className="space-y-2.5 pt-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-slate-600">
+              Active X Pixel Bounds &amp; Zero-Order Centre
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label
+                htmlFor="ccd-x-min"
+                className="block text-[11px] text-slate-600 mb-1"
+              >
+                X Start (px)
+              </label>
+              <input
+                id="ccd-x-min"
+                type="number"
+                min={0}
+                max={500}
+                value={params.ccdActiveXMinPx ?? 18}
+                onChange={(e) => {
+                  const nextMin = Math.max(
+                    0,
+                    Math.min(500, parseInt(e.target.value, 10) || 0)
+                  );
+                  const currentMax = params.ccdActiveXMaxPx ?? 1032;
+                  const nextWidth = Math.max(100, currentMax - nextMin);
+                  onChangeParams({
+                    ...params,
+                    ccdActiveXMinPx: nextMin,
+                    ccdActiveXMaxPx: currentMax,
+                    ccdActiveWidthPx: nextWidth,
+                  });
+                }}
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="ccd-x-max"
+                className="block text-[11px] text-slate-600 mb-1"
+              >
+                X End (px)
+              </label>
+              <input
+                id="ccd-x-max"
+                type="number"
+                min={540}
+                max={params.ccdTotalWidthPx}
+                value={params.ccdActiveXMaxPx ?? 1032}
+                onChange={(e) => {
+                  const nextMax = Math.max(
+                    540,
+                    Math.min(
+                      params.ccdTotalWidthPx,
+                      parseInt(e.target.value, 10) || 1032
+                    )
+                  );
+                  const currentMin = params.ccdActiveXMinPx ?? 18;
+                  const nextWidth = Math.max(100, nextMax - currentMin);
+                  onChangeParams({
+                    ...params,
+                    ccdActiveXMinPx: currentMin,
+                    ccdActiveXMaxPx: nextMax,
+                    ccdActiveWidthPx: nextWidth,
+                  });
+                }}
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="ccd-x-centre"
+                className="block text-[11px] text-slate-600 mb-1"
+              >
+                Centre (px)
+              </label>
+              <input
+                id="ccd-x-centre"
+                type="number"
+                min={400}
+                max={640}
+                value={params.ccdZeroOrderCentrePx ?? 517}
+                onChange={(e) => {
+                  const nextCentre = Math.max(
+                    400,
+                    Math.min(640, parseInt(e.target.value, 10) || 517)
+                  );
+                  onChangeParams({
+                    ...params,
+                    ccdZeroOrderCentrePx: nextCentre,
+                  });
+                }}
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label
@@ -409,12 +533,22 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               min={512}
               max={1040}
               value={params.ccdActiveWidthPx}
-              onChange={(e) =>
-                update(
-                  'ccdActiveWidthPx',
-                  Math.max(512, Math.min(1040, parseInt(e.target.value, 10) || 1014))
-                )
-              }
+              onChange={(e) => {
+                const nextWidth = Math.max(
+                  512,
+                  Math.min(1040, parseInt(e.target.value, 10) || 1014)
+                );
+                const nextMin = Math.round(
+                  (params.ccdTotalWidthPx - nextWidth) / 2
+                );
+                const nextMax = nextMin + nextWidth;
+                onChangeParams({
+                  ...params,
+                  ccdActiveWidthPx: nextWidth,
+                  ccdActiveXMinPx: nextMin,
+                  ccdActiveXMaxPx: nextMax,
+                });
+              }}
               className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
             />
           </div>
@@ -423,7 +557,9 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               htmlFor="ccd-active-height"
               className="block text-xs text-slate-600 mb-1"
             >
-              Bottom Rows (of {params.ccdTotalHeightPx} px)
+              {params.spectrograph === 'Virsa'
+                ? 'Active Y Rows (125–145)'
+                : `Bottom Rows (of ${params.ccdTotalHeightPx} px)`}
             </label>
             <input
               id="ccd-active-height"

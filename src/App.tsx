@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  calculateCcdWindowBoundsCm1,
   CalibrationParameters,
   solveCalibration,
 } from './calibration/physicsEngine';
@@ -22,9 +23,10 @@ import {
 type WorkspaceTab = 'checker' | 'picker' | 'simulator' | 'matrix';
 
 export default function App() {
-  // Default to the validated 532nm / 600 l/mm preset on startup
+  // Default to Virsa · 532 nm · 2400 l/mm (16 TargetCalLines = 3 per zone, MinNeIntensity = 1) on startup
   const initialPreset =
-    FACTORY_PRESETS.find((p) => p.id === '532-600-std') || FACTORY_PRESETS[0];
+    FACTORY_PRESETS.find((p) => p.id === 'virsa-532-2400-empirical') ||
+    FACTORY_PRESETS[0];
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('checker');
   const [activePresetId, setActivePresetId] = useState<string>(
     initialPreset.id
@@ -65,7 +67,8 @@ export default function App() {
 
   const handleResetDefaults = () => {
     const def =
-      FACTORY_PRESETS.find((p) => p.id === '532-600-std') || FACTORY_PRESETS[0];
+      FACTORY_PRESETS.find((p) => p.id === 'virsa-532-2400-empirical') ||
+      FACTORY_PRESETS[0];
     handleSelectPreset(def);
   };
 
@@ -94,6 +97,16 @@ export default function App() {
     );
     if (emp) {
       handleSelectPreset(emp);
+      setActiveTab('checker');
+    }
+  };
+
+  const handleLoadEmpiricalVirsa2400 = () => {
+    const empVirsa = FACTORY_PRESETS.find(
+      (p) => p.id === 'virsa-532-2400-empirical'
+    );
+    if (empVirsa) {
+      handleSelectPreset(empVirsa);
       setActiveTab('checker');
     }
   };
@@ -260,40 +273,108 @@ export default function App() {
             aria-label="Calculated Optical Calibration Metrics"
             className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
           >
-            {/* Card 1: Absolute Raman Range */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">
-              <div className="text-xs text-slate-500">
-                Absolute Calibration Range
+            {/* Card 1: Absolute Calibration Range (Editable on File Checker tab, lower number first, whole numbers) */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-slate-500">
+                  Absolute Calibration Range
+                </div>
+                {(params.customAbsLowCm1 != null ||
+                  params.customAbsHighCm1 != null) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleChangeParams({
+                        ...params,
+                        customAbsLowCm1: null,
+                        customAbsHighCm1: null,
+                      })
+                    }
+                    className="text-[10px] font-medium text-cyan-700 hover:text-cyan-900 underline"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
-              <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-                <span className="text-lg font-mono font-bold text-slate-900 tabular-nums">
-                  {solution.absHighCm1.toFixed(1)} –{' '}
-                  {solution.absLowCm1.toFixed(1)}
-                </span>
-                <span className="text-xs font-mono text-slate-400">cm⁻¹</span>
-              </div>
+
+              {activeTab === 'checker' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step={1}
+                    aria-label="Absolute Calibration Range Start (cm-1)"
+                    value={Math.round(solution.absLowCm1)}
+                    onChange={(e) => {
+                      const nextLow = Number(e.target.value);
+                      if (!Number.isNaN(nextLow)) {
+                        handleChangeParams({
+                          ...params,
+                          customAbsLowCm1: Math.round(nextLow),
+                          customAbsHighCm1: Math.round(
+                            params.customAbsHighCm1 ?? solution.absHighCm1
+                          ),
+                        });
+                      }
+                    }}
+                    className="w-20 rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono text-sm font-bold text-slate-900 tabular-nums focus:border-cyan-600 focus:bg-white focus:outline-none"
+                  />
+                  <span className="font-mono text-sm font-bold text-slate-400">
+                    –
+                  </span>
+                  <input
+                    type="number"
+                    step={1}
+                    aria-label="Absolute Calibration Range End (cm-1)"
+                    value={Math.round(solution.absHighCm1)}
+                    onChange={(e) => {
+                      const nextHigh = Number(e.target.value);
+                      if (!Number.isNaN(nextHigh)) {
+                        handleChangeParams({
+                          ...params,
+                          customAbsLowCm1: Math.round(
+                            params.customAbsLowCm1 ?? solution.absLowCm1
+                          ),
+                          customAbsHighCm1: Math.round(nextHigh),
+                        });
+                      }
+                    }}
+                    className="w-20 rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono text-sm font-bold text-slate-900 tabular-nums focus:border-cyan-600 focus:bg-white focus:outline-none"
+                  />
+                  <span className="text-xs font-mono text-slate-400">cm⁻¹</span>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                  <span className="text-lg font-mono font-bold text-slate-900 tabular-nums">
+                    {Math.round(solution.absLowCm1)} –{' '}
+                    {Math.round(solution.absHighCm1)}
+                  </span>
+                  <span className="text-xs font-mono text-slate-400">cm⁻¹</span>
+                </div>
+              )}
+
               <div className="text-xs font-mono text-slate-500 tabular-nums">
-                Centre: {solution.absCentreCm1.toFixed(2)} cm⁻¹ (
-                {solution.effectiveRamanMinCm1}–{solution.effectiveRamanMaxCm1}{' '}
-                Raman)
+                Centre: {Math.round(solution.absCentreCm1)} cm⁻¹ (
+                {Math.round(solution.effectiveRamanMinCm1)}–
+                {Math.round(solution.effectiveRamanMaxCm1)} Raman)
               </div>
             </div>
 
-            {/* Card 2: Grating Turret Scan Range */}
+            {/* Card 2: Grating Turret Scan Range (Lower number first, whole numbers) */}
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">
               <div className="text-xs text-slate-500">
                 Grating Turret Scan Range
               </div>
               <div className="flex items-baseline gap-1.5 whitespace-nowrap">
                 <span className="text-lg font-mono font-bold text-cyan-800 tabular-nums">
-                  {solution.scanHighCm1.toFixed(1)} –{' '}
-                  {solution.scanLowCm1.toFixed(1)}
+                  {Math.round(solution.scanLowCm1)} –{' '}
+                  {Math.round(solution.scanHighCm1)}
                 </span>
                 <span className="text-xs font-mono text-slate-400">cm⁻¹</span>
               </div>
               <div className="text-xs font-mono text-slate-500 tabular-nums">
-                Total Span: {solution.scanSpanCm1.toFixed(1)} cm⁻¹ · CCD Win:{' '}
-                {solution.ccdWindowCentreCm1.toFixed(0)} cm⁻¹
+                CCD Win: {Math.round(solution.ccdWindowLowCm1)} →{' '}
+                {Math.round(solution.ccdWindowCentreCm1)} →{' '}
+                {Math.round(solution.ccdWindowHighCm1)} cm⁻¹
               </div>
             </div>
 
@@ -320,23 +401,48 @@ export default function App() {
             </div>
 
             {/* Card 4: Turret Motor Step Size & CCD Occurrences */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">
-              <div className="text-xs text-slate-500">
-                Turret Motor Step Size
-              </div>
-              <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-                <span className="text-lg font-mono font-bold text-slate-900 tabular-nums">
-                  {solution.recommendedMotorStepTicks}
-                </span>
-                <span className="text-xs font-mono text-slate-400">
-                  steps / scan
-                </span>
-              </div>
-              <div className="text-xs font-mono text-emerald-700 tabular-nums">
-                {solution.achievedOccurrencesAtCentre} hits/line across{' '}
-                {params.ccdActiveWidthPx} px ({solution.totalScanSteps} scans)
-              </div>
-            </div>
+            {(() => {
+              const lowestAnalysis = auditReport.lowestLineAnalysis;
+              const effectiveStepAbsCm1 =
+                lowestAnalysis && activeTab === 'checker'
+                  ? lowestAnalysis.recommendedStepCm1AtLowest
+                  : solution.wireXStepAbsCm1;
+              const effectiveScanCount =
+                lowestAnalysis && activeTab === 'checker'
+                  ? lowestAnalysis.totalScansWithLowestStep
+                  : solution.wireXTotalScanCount;
+              const lowWinCm1 =
+                lowestAnalysis && activeTab === 'checker'
+                  ? lowestAnalysis.ccdWindowAtLowestCm1
+                  : solution.ccdWindowLowCm1;
+              const hitsLow = Number(
+                (lowWinCm1 / Math.max(1, effectiveStepAbsCm1)).toFixed(1)
+              );
+              const hitsHigh = Number(
+                (
+                  solution.ccdWindowHighCm1 / Math.max(1, effectiveStepAbsCm1)
+                ).toFixed(1)
+              );
+
+              return (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">
+                  <div className="text-xs text-slate-500">
+                    Calibration Step Size
+                  </div>
+                  <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                    <span className="text-lg font-mono font-bold text-slate-900 tabular-nums">
+                      {effectiveStepAbsCm1}
+                    </span>
+                    <span className="text-xs font-mono text-slate-400">
+                      Abs cm⁻¹ ({effectiveScanCount} scans)
+                    </span>
+                  </div>
+                  <div className="text-xs font-mono text-emerald-700 tabular-nums">
+                    WiRE X Hits: {hitsLow} (low) – {hitsHigh} (high) / line
+                  </div>
+                </div>
+              );
+            })()}
           </section>
 
           {/* Limiting Factors Notice Strip */}
@@ -358,6 +464,8 @@ export default function App() {
           {activeTab === 'checker' && (
             <FileCheckerView
               auditReport={auditReport}
+              params={params}
+              onChangeParams={handleChangeParams}
               onUpdateFileContent={(name, content) => {
                 setFileName(name);
                 setFileContent(content);
@@ -365,6 +473,7 @@ export default function App() {
               onAutoRepairFile={handleAutoRepairFile}
               onLoadFlawedDemo={handleLoadFlawedDemo}
               onLoadEmpirical1800Lns={handleLoadEmpirical1800Lns}
+              onLoadEmpiricalVirsa2400={handleLoadEmpiricalVirsa2400}
               onExportCalFile={handleExportCalFile}
             />
           )}

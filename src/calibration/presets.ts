@@ -22,6 +22,9 @@ const DEFAULT_BASE_PARAMS: Omit<
   ccdType: 'FDA',
   ccdTotalWidthPx: 1040,
   ccdActiveWidthPx: 1014,
+  ccdActiveXMinPx: 18,
+  ccdActiveXMaxPx: 1032,
+  ccdZeroOrderCentrePx: 517,
   ccdTotalHeightPx: 256,
   ccdActiveHeightPx: 30,
   ccdDetectionCutoffCm1: 9800,
@@ -30,6 +33,8 @@ const DEFAULT_BASE_PARAMS: Omit<
   targetLineCount: 9,
   minRelativeIntensity: 280,
   manualPclOverrideCm1: null,
+  customAbsLowCm1: null,
+  customAbsHighCm1: null,
 };
 
 function makePresetFile(params: CalibrationParameters): string {
@@ -244,7 +249,77 @@ const EMPIRICAL_532_1800_LNS_FILE = `10 Seconds
 10474.0\t\t9196
 `;
 
+const EMPIRICAL_VIRSA_532_2400_FILE = `# Empirical Virsa 532nm / 2400 l/mm Calibration (50um Fibre · 14000-19400 cm-1 · 108 Scans @ 50 cm-1 Abs Step)
+Spectrograph: Virsa
+Laser: 532nm
+Grating: 2400 l/mm
+Filter: Standard (50-4000 cm-1)
+CCD: FDA (1040x256 px, Active X: 10-1030, Active Y: 125-145, Zero-Order Centre: Pixel 517, Pitch: -0.026 mm, -70 C in 20 C Air)
+ScanRange: 19400.0 - 14000.0
+PCL: 17086.75
+MotorStep: 50
+# Pre-Cal Offset: -12.95 Abs cm-1 @ 17086.75 (0.1s scan: 109,074 e-/cm-1 / 56,960 raw counts/px, FWHM 2.23 cm-1)
+# Fit Parameters: Focal Length 200.0 -> 202.7247295 mm (4.2669245e-5), Included Angle 0.663200 -> 0.660570 rad (37.847895 deg)
+# RMS Deviation: 12.330609 -> 0.076815 cm-1 | Most accurate line: 15619.514 cm-1 (+/- 0.03 cm-1 error across CCD)
+# Wavenumber(cm-1)   Electrons/cm-1(0.1s)
+14430.70\t15386.4
+14887.48\t46162.8
+15153.88\t25305.5
+15307.17\t21495.5
+15369.18\t37874.2
+15619.52\t50558.0
+15666.65\t75902.5
+15860.75\t11021.1
+15957.88\t61351.2
+16084.20\t75602.2
+16224.22\t30350.0
+16278.53\t104029.8
+16403.75\t28044.9
+16462.71\t17713.5
+16583.75\t5125.9
+16734.68\t10903.5
+16821.33\t18184.7
+17001.30\t15284.7
+17086.75\t110408.0
+17181.86\t412.2
+17228.02\t119.3
+17347.80\t749.2
+17484.88\t45.9
+17678.29\t1051.5
+17835.71\t50.9
+17976.67\t284.9
+18343.06\t62.2
+18516.59\t3053.6
+18758.99\t42.3
+`;
+
+const paramsVirsa532_2400: CalibrationParameters = {
+  ...DEFAULT_BASE_PARAMS,
+  spectrograph: 'Virsa',
+  laserNm: 532,
+  gratingLinesPerMm: 2400,
+  filterType: 'standard',
+  ccdActiveWidthPx: 1014, // Active X: 18 to 1032
+  ccdActiveXMinPx: 18,
+  ccdActiveXMaxPx: 1032,
+  ccdZeroOrderCentrePx: 517,
+  ccdActiveHeightPx: 20, // Active Y: 125 to 145 (50um fibre)
+  targetOccurrencesPerLine: 16,
+  targetLineCount: 16, // 3 per zone across 5 zones + PCL
+  minRelativeIntensity: 1,
+};
+
 export const FACTORY_PRESETS: FactoryPreset[] = [
+  {
+    id: 'virsa-532-2400-empirical',
+    label: 'Virsa · 532 nm · 2400 l/mm — Empirical 50µm Fibre Calibration (14000–19400 cm⁻¹, 108 Scans)',
+    shortTag: 'Virsa 532nm / 2400 (50µm Fibre)',
+    description:
+      'Virsa 532nm + 2400 l/mm empirical calibration (X: 10–1030 px, Y: 125–145 px, Zero-order pixel 517, F = 200→202.725 mm, Included angle = 0.6632→0.66057 rad, RMS 12.33→0.0768 cm⁻¹). Focused & offset -12.95 cm⁻¹ at 17086.75 cm⁻¹ (FWHM 2.23 cm⁻¹); most accurate line 15619.514 cm⁻¹ (±0.03 cm⁻¹).',
+    params: paramsVirsa532_2400,
+    sampleFileName: 'Virsa_532nm_2400_50um_calibrated.txt',
+    sampleFileContent: EMPIRICAL_VIRSA_532_2400_FILE,
+  },
   {
     id: '532-600-flawed-audit',
     label: '532 nm · 600 l/mm — Issue Audit Demo (Clustered + Confusion Risk)',

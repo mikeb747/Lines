@@ -7,11 +7,13 @@ export interface NeonLine {
   transition: string;
   isPrimaryCandidate: boolean;
   notes?: string;
-  // Empirical 532nm / 1800 l/mm calibration reference data (from 532nm_1800.lns & update.txt)
+  // Empirical inVia 532nm / 1800 l/mm calibration reference data (from 532nm_1800.lns & update.txt)
   empiricalScanSec1800?: number; // Scan duration (0.5s, 1s, 5s, 10s) used to avoid >1,000,000 count saturation
   empiricalRawCounts1800?: number; // Measured counts at empiricalScanSec1800 on 1800 l/mm grating
   countsAt1s1800?: number; // Normalized counts per 1.0 second (saturation ceiling = 1,000,000 counts/s)
-  isFocusAnchor?: boolean; // Used for focusing near/far lenses (18516.592 & 15619.514 cm^-1)
+  // Empirical Virsa 532nm / 2400 l/mm post-calibration intensity (electrons per wavenumber @ 0.1s, 50um fibre)
+  virsa2400ElectronsPerCm1?: number;
+  isFocusAnchor?: boolean; // Used for focusing near/far lenses on inVia (18516.592 & 15619.514 cm^-1)
   closeNeighborWarning?: string; // Explicit engineering note where lines are too close or unobservable
   excludeFromAutoPick?: boolean; // True for weak/blended .lns diagnostic peaks so auto-picker only chooses clean anchors
 }
@@ -67,8 +69,9 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 10,
     empiricalRawCounts1800: 0,
     countsAt1s1800: 0,
+    virsa2400ElectronsPerCm1: 42.3,
     closeNeighborWarning: '0 counts on 532nm 1800 l/mm FDA camera with visible lenses (calibration performed without filters)',
-    notes: 'High-wavenumber anchor for 532nm 600 l/mm; not visible on 532nm 1800 l/mm FDA camera with visible lenses',
+    notes: 'Detected on Virsa 532nm 2400 l/mm (42.3 e⁻/cm⁻¹); not visible on inVia 1800 l/mm FDA camera with visible lenses',
   },
   { id: 'ne-18716', wavenumber: 18716.08, wavelengthAirNm: 534.109, relativeIntensity: 580, fwhmCm1: 0.95, transition: '3p[1/2]1 - 4d[1/2]1', isPrimaryCandidate: false, notes: 'Close doublet with 18758.92' },
   {
@@ -83,7 +86,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 10,
     empiricalRawCounts1800: 76439,
     countsAt1s1800: 7644,
-    notes: 'Near/Far lens focus anchor (18516.592 cm⁻¹) · 76,439 counts @ 10s on 1800 l/mm',
+    virsa2400ElectronsPerCm1: 495.3,
+    notes: 'inVia Near/Far lens focus anchor (18516.592 cm⁻¹) · Virsa 2400: 495.3 e⁻/cm⁻¹ · inVia 1800: 76,439 counts @ 10s',
   },
   {
     id: 'ne-18404',
@@ -96,8 +100,9 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 10,
     empiricalRawCounts1800: 383,
     countsAt1s1800: 38,
+    virsa2400ElectronsPerCm1: 3.2,
     excludeFromAutoPick: true,
-    notes: 'Weak line (383 counts @ 10s on 1800 l/mm)',
+    notes: 'Weak line (Virsa 2400: 3.2 e⁻/cm⁻¹ · inVia 1800: 383 counts @ 10s)',
   },
   {
     id: 'ne-18354',
@@ -139,7 +144,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 10,
     empiricalRawCounts1800: 1014,
     countsAt1s1800: 101,
-    notes: 'Standard 532nm upper-mid calibration line (1,014 counts @ 10s on 1800 l/mm)',
+    virsa2400ElectronsPerCm1: 11.4,
+    notes: 'Standard 532nm upper-mid calibration line (Virsa 2400: 11.4 e⁻/cm⁻¹ · inVia 1800: 1,014 counts @ 10s)',
   },
   {
     id: 'ne-17836',
@@ -165,7 +171,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 10,
     empiricalRawCounts1800: 3707,
     countsAt1s1800: 371,
-    notes: 'Standard 532nm calibration line (3,707 counts @ 10s on 1800 l/mm)',
+    virsa2400ElectronsPerCm1: 27.6,
+    notes: 'Standard 532nm calibration line (Virsa 2400: 27.6 e⁻/cm⁻¹ · inVia 1800: 3,707 counts @ 10s)',
   },
   { id: 'ne-17572', wavenumber: 17572.14, wavelengthAirNm: 568.982, relativeIntensity: 360, fwhmCm1: 0.90, transition: '3p - 5s', isPrimaryCandidate: false },
 
@@ -181,7 +188,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 178,
     countsAt1s1800: 178,
-    notes: '178 counts @ 1s (exposure limited by 17086.75 on CCD); confusion risk with 17347.80 on 600 l/mm',
+    virsa2400ElectronsPerCm1: 17.5,
+    notes: 'Virsa 2400: 17.5 e⁻/cm⁻¹ · inVia 1800: 178 counts @ 1s; confusion risk with 17347.80 on 600 l/mm',
   },
   { id: 'ne-17409', wavenumber: 17408.62, wavelengthAirNm: 574.427, relativeIntensity: 310, fwhmCm1: 0.92, transition: '3p - 4d', isPrimaryCandidate: false },
   {
@@ -195,7 +203,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 2574,
     countsAt1s1800: 2574,
-    notes: '2,574 counts @ 1s on 1800 l/mm (137.08 cm⁻¹ from 17484.88)',
+    virsa2400ElectronsPerCm1: 552.0,
+    notes: 'Virsa 2400: 552.0 e⁻/cm⁻¹ · inVia 1800: 2,574 counts @ 1s (137.08 cm⁻¹ from 17484.88)',
   },
   {
     id: 'ne-17228',
@@ -221,7 +230,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 1524,
     countsAt1s1800: 1524,
-    notes: '1,524 counts @ 1s (95.1 cm⁻¹ above 17086.75 PCL)',
+    virsa2400ElectronsPerCm1: 323.0,
+    notes: 'Virsa 2400: 323.0 e⁻/cm⁻¹ · inVia 1800: 1,524 counts @ 1s (95.1 cm⁻¹ above 17086.75 PCL)',
   },
 
   // 532nm / 1800 l/mm 0.5-Second Scan Region (17086.750 - 16403.761 cm^-1: Dominated by intense 17086.75 PCL)
@@ -230,13 +240,14 @@ export const NEON_CATALOG: NeonLine[] = [
     wavenumber: 17086.75,
     wavelengthAirNm: 585.249,
     relativeIntensity: 1000,
-    fwhmCm1: 0.82,
+    fwhmCm1: 2.23,
     transition: '3s\'[1/2]1 - 3p\'[1/2]0',
     isPrimaryCandidate: true,
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 360086,
     countsAt1s1800: 720172,
-    notes: 'Primary Calibration Line (PCL) — 360,086 counts @ 0.5s (720,172 cps; saturates >1M above 1.38s!)',
+    virsa2400ElectronsPerCm1: 110408.0,
+    notes: 'Primary Calibration Line (PCL) — Virsa 2400 (50µm fibre, 0.1s): 109,074 e⁻/cm⁻¹ (56,960 raw counts/px, FWHM 2.23 cm⁻¹, -12.95 cm⁻¹ offset) · inVia 1800: 360,086 counts @ 0.5s',
   },
   {
     id: 'ne-17002',
@@ -249,7 +260,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 52340,
     countsAt1s1800: 104680,
-    notes: '52,340 counts @ 0.5s (84.9 cm⁻¹ below 17086.75 PCL)',
+    virsa2400ElectronsPerCm1: 12785.0,
+    notes: 'Virsa 2400: 12,785.0 e⁻/cm⁻¹ · inVia 1800: 52,340 counts @ 0.5s',
   },
   {
     id: 'ne-16822',
@@ -262,7 +274,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 57789,
     countsAt1s1800: 115578,
-    notes: '57,789 counts @ 0.5s (16821.33 cm⁻¹ in 1800 .lns)',
+    virsa2400ElectronsPerCm1: 21674.0,
+    notes: 'Virsa 2400: 21,674.0 e⁻/cm⁻¹ · inVia 1800: 57,789 counts @ 0.5s (16821.33 cm⁻¹)',
   },
   {
     id: 'ne-16735',
@@ -275,7 +288,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 37735,
     countsAt1s1800: 75470,
-    notes: '37,735 counts @ 0.5s',
+    virsa2400ElectronsPerCm1: 5849.0,
+    notes: 'Virsa 2400: 5,849.0 e⁻/cm⁻¹ · inVia 1800: 37,735 counts @ 0.5s',
   },
   {
     id: 'ne-16584',
@@ -288,7 +302,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 17933,
     countsAt1s1800: 35866,
-    notes: '17,933 counts @ 0.5s',
+    virsa2400ElectronsPerCm1: 6323.0,
+    notes: 'Virsa 2400: 6,323.0 e⁻/cm⁻¹ · inVia 1800: 17,933 counts @ 0.5s',
   },
   {
     id: 'ne-16463',
@@ -301,7 +316,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 59327,
     countsAt1s1800: 118654,
-    notes: '59,327 counts @ 0.5s',
+    virsa2400ElectronsPerCm1: 15225.2,
+    notes: 'Virsa 2400: 15,225.2 e⁻/cm⁻¹ · inVia 1800: 59,327 counts @ 0.5s',
   },
   {
     id: 'ne-16403',
@@ -314,7 +330,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 92605,
     countsAt1s1800: 185210,
-    notes: '92,605 counts @ 0.5s',
+    virsa2400ElectronsPerCm1: 26990.8,
+    notes: 'Virsa 2400: 26,990.8 e⁻/cm⁻¹ · inVia 1800: 92,605 counts @ 0.5s',
   },
 
   // 532nm / 1800 l/mm 1-Second Scan Region (16278.525 - 14553.1 cm^-1)
@@ -329,7 +346,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 371012,
     countsAt1s1800: 371012,
-    notes: 'High-intensity orange-red line (371,012 counts @ 1s on 1800 l/mm)',
+    virsa2400ElectronsPerCm1: 48298.4,
+    notes: 'High-intensity orange-red line (Virsa 2400: 48,298.4 e⁻/cm⁻¹ · inVia 1800: 371,012 counts @ 1s)',
   },
   {
     id: 'ne-16224',
@@ -342,7 +360,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 107849,
     countsAt1s1800: 107849,
-    notes: '107,849 counts @ 1s',
+    virsa2400ElectronsPerCm1: 10988.4,
+    notes: 'Virsa 2400: 10,988.4 e⁻/cm⁻¹ · inVia 1800: 107,849 counts @ 1s',
   },
   {
     id: 'ne-16085',
@@ -355,7 +374,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 259375,
     countsAt1s1800: 259375,
-    notes: '259,375 counts @ 1s (16084.201 cm⁻¹ in 1800 .lns)',
+    virsa2400ElectronsPerCm1: 2747.1,
+    notes: 'Virsa 2400: 2,747.1 e⁻/cm⁻¹ · inVia 1800: 259,375 counts @ 1s (16084.20 cm⁻¹)',
   },
   {
     id: 'ne-15958',
@@ -368,7 +388,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 227768,
     countsAt1s1800: 227768,
-    notes: '227,768 counts @ 1s',
+    virsa2400ElectronsPerCm1: 23644.0,
+    notes: 'Virsa 2400: 23,644.0 e⁻/cm⁻¹ · inVia 1800: 227,768 counts @ 1s',
   },
   {
     id: 'ne-15862',
@@ -381,9 +402,20 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 47177,
     countsAt1s1800: 47177,
-    notes: '47,177 counts @ 1s',
+    virsa2400ElectronsPerCm1: 6933.2,
+    notes: 'Virsa 2400: 6,933.2 e⁻/cm⁻¹ · inVia 1800: 47,177 counts @ 1s',
   },
-  { id: 'ne-15787', wavenumber: 15786.80, wavelengthAirNm: 633.443, relativeIntensity: 910, fwhmCm1: 0.82, transition: '3s[3/2]2 - 3p[5/2]2', isPrimaryCandidate: true, notes: 'Near 632.8nm laser line (Rayleigh edge)' },
+  {
+    id: 'ne-15787',
+    wavenumber: 15786.80,
+    wavelengthAirNm: 633.443,
+    relativeIntensity: 910,
+    fwhmCm1: 0.82,
+    transition: '3s[3/2]2 - 3p[5/2]2',
+    isPrimaryCandidate: true,
+    virsa2400ElectronsPerCm1: 21442.8,
+    notes: 'Virsa 2400: 21,442.8 e⁻/cm⁻¹ · Near 632.8nm laser line',
+  },
   {
     id: 'ne-15666',
     wavenumber: 15666.02,
@@ -395,7 +427,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 324699,
     countsAt1s1800: 324699,
-    notes: '324,699 counts @ 1s',
+    virsa2400ElectronsPerCm1: 33682.4,
+    notes: 'Virsa 2400: 33,682.4 e⁻/cm⁻¹ · inVia 1800: 324,699 counts @ 1s',
   },
   {
     id: 'ne-15619',
@@ -409,7 +442,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 468176,
     countsAt1s1800: 468176,
-    notes: 'Near/Far lens focus anchor (15619.514 cm⁻¹) · 468,176 counts @ 1s on 1800 l/mm',
+    virsa2400ElectronsPerCm1: 50558.0,
+    notes: 'Most accurate line on Virsa 2400 l/mm (±0.03 cm⁻¹ error across CCD, 50,558.0 e⁻/cm⁻¹) · inVia lens focus anchor (15619.514 cm⁻¹)',
   },
   {
     id: 'ne-15369',
@@ -422,7 +456,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 210282,
     countsAt1s1800: 210282,
-    notes: '210,282 counts @ 1s',
+    virsa2400ElectronsPerCm1: 25126.8,
+    notes: 'Virsa 2400: 25,126.8 e⁻/cm⁻¹ · inVia 1800: 210,282 counts @ 1s',
   },
   {
     id: 'ne-15307',
@@ -435,7 +470,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 119474,
     countsAt1s1800: 119474,
-    notes: '119,474 counts @ 1s (WiRE X 15300 cm⁻¹ lower boundary anchor)',
+    virsa2400ElectronsPerCm1: 9465.2,
+    notes: 'Virsa 2400: 9,465.2 e⁻/cm⁻¹ · inVia 1800: 119,474 counts @ 1s',
   },
   {
     id: 'ne-15154',
@@ -448,9 +484,20 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 155798,
     countsAt1s1800: 155798,
-    notes: '532nm low-wavenumber calibration line (155,798 counts @ 1s) / 660nm Rayleigh edge',
+    virsa2400ElectronsPerCm1: 7353.4,
+    notes: 'Virsa 2400: 7,353.4 e⁻/cm⁻¹ · inVia 1800: 155,798 counts @ 1s',
   },
-  { id: 'ne-14974', wavenumber: 14973.88, wavelengthAirNm: 667.828, relativeIntensity: 870, fwhmCm1: 0.84, transition: '3s\'[1/2]1 - 3p\'[3/2]2', isPrimaryCandidate: true },
+  {
+    id: 'ne-14974',
+    wavenumber: 14973.88,
+    wavelengthAirNm: 667.828,
+    relativeIntensity: 870,
+    fwhmCm1: 0.84,
+    transition: '3s\'[1/2]1 - 3p\'[3/2]2',
+    isPrimaryCandidate: true,
+    virsa2400ElectronsPerCm1: 17025.4,
+    notes: 'Virsa 2400: 17,025.4 e⁻/cm⁻¹',
+  },
   {
     id: 'ne-14887',
     wavenumber: 14887.41,
@@ -462,7 +509,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 1,
     empiricalRawCounts1800: 312093,
     countsAt1s1800: 312093,
-    notes: '532nm 4000cm-1 boundary anchor (312,093 counts @ 1s on 1800 l/mm)',
+    virsa2400ElectronsPerCm1: 12157.6,
+    notes: '532nm 4000cm-1 boundary anchor (Virsa 2400: 12,157.6 e⁻/cm⁻¹ · inVia 1800: 312,093 counts @ 1s)',
   },
   {
     id: 'ne-14808',
@@ -506,7 +554,8 @@ export const NEON_CATALOG: NeonLine[] = [
     empiricalScanSec1800: 0.5,
     empiricalRawCounts1800: 166693,
     countsAt1s1800: 333386,
-    notes: '166,693 counts @ 0.5s (333,386 cps) · PCL candidate for 633nm 2400 l/mm',
+    virsa2400ElectronsPerCm1: 15386.4,
+    notes: 'Virsa 2400 low-wavenumber line (14430.70 cm⁻¹: 15,386.4 e⁻/cm⁻¹) · inVia 1800: 166,693 counts @ 0.5s',
   },
   { id: 'ne-14236', wavenumber: 14235.95, wavelengthAirNm: 702.405, relativeIntensity: 560, fwhmCm1: 0.86, transition: '3s[3/2]2 - 3p[1/2]1', isPrimaryCandidate: false },
   {
