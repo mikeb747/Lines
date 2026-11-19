@@ -80,7 +80,7 @@ export default function App() {
     setFileName(cleanName);
     setFileContent(repairedText);
     setStatusBanner(
-      `Auto-repaired calibration file with ${freshSolution.selectedLines.length} evenly dispersed Neon lines and ${freshSolution.recommendedMotorStepTicks}-step motor increment.`
+      `Auto-repaired calibration file with ${freshSolution.selectedLines.length} evenly dispersed Neon lines and ${freshSolution.wireXStepAbsCm1} Abs cm⁻¹ step (${freshSolution.wireXTotalScanCount} scans).`
     );
   };
 
@@ -261,6 +261,11 @@ export default function App() {
               <span>
                 {params.ccdType} CCD ({params.ccdActiveWidthPx}×
                 {params.ccdActiveHeightPx} px)
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {(params.roomTemperatureC ?? 20).toFixed(1)} °C Air (n ={' '}
+                {solution.thermalOptics.airRefractiveIndex.toFixed(6)})
               </span>
             </div>
 
@@ -508,7 +513,7 @@ export default function App() {
       {/* Quiet Footer */}
       <footer className="border-t border-slate-200 bg-white px-6 py-3 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
         <span>
-          SpectroCal Optical Calibration Workbench · Virsa / inVia / Strava
+          SpectroCal Optical Calibration Workbench · Virsa / inVia / Strada
           Dispersive Raman Systems
         </span>
         <div className="flex items-center gap-4">

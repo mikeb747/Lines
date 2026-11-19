@@ -1,6 +1,6 @@
 {
   "name": "SpectroCal — Spectrograph Neon Calibration & File Checker",
-  "description": "Optical spectrograph calibration workbench and automated file verifier for Virsa, inVia, and Strava Raman systems using Neon emission lines.",
+  "description": "Optical spectrograph calibration workbench and automated file verifier for Virsa, inVia, and Strada Raman systems using Neon emission lines.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

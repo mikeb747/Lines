@@ -20,7 +20,7 @@ export interface NeonLine {
 
 /**
  * Comprehensive reference catalog of Neon I (Ne I) and high-lying Neon emission lines
- * used for calibrating dispersive Raman spectrographs (Virsa, inVia, Strava) from
+ * used for calibrating dispersive Raman spectrographs (Virsa, inVia, Strada) from
  * 25,200 cm^-1 (397 nm) down to 8,600 cm^-1 (1162 nm).
  * Includes exact factory calibration lines, NIST Atomic Spectra Database lines,
  * and empirical multi-exposure count rates from the 532nm / 1800 l/mm reference system.

@@ -149,10 +149,11 @@ export function auditCalibrationFile(
     }
 
     const specMatch = raw.match(
-      /(?:spectrograph|system|instrument)\s*[:=]\s*(inVia|Virsa|Strava)/i
+      /(?:spectrograph|system|instrument)\s*[:=]\s*(inVia|Virsa|Strada|Strava)/i
     );
     if (specMatch) {
-      detectedHeaders.spectrograph = specMatch[1];
+      detectedHeaders.spectrograph =
+        specMatch[1].toLowerCase() === 'strava' ? 'Strada' : specMatch[1];
       continue;
     }
 
@@ -281,11 +282,30 @@ export function auditCalibrationFile(
       wavenumberCm1 >= solution.absLowCm1 - 5;
 
     const effectiveStepTicks =
-      detectedHeaders.motorStepTicks || solution.recommendedMotorStepTicks;
-    const cm1PerTick = solution.ccdWindowCentreCm1 / 400;
-    const stepShiftCm1 = effectiveStepTicks * cm1PerTick;
+      detectedHeaders.motorStepTicks ||
+      (params.spectrograph === 'Virsa'
+        ? solution.wireXStepAbsCm1
+        : solution.recommendedMotorStepTicks);
+    const lineWindowBounds = calculateCcdWindowBoundsCm1(
+      wavenumberCm1,
+      params.gratingLinesPerMm,
+      params.ccdActiveWidthPx,
+      params.spectrograph,
+      params.ccdActiveXMinPx,
+      params.ccdActiveXMaxPx,
+      params.ccdZeroOrderCentrePx,
+      params.roomTemperatureC
+    );
+    const stepShiftCm1 =
+      params.spectrograph === 'Virsa'
+        ? effectiveStepTicks
+        : effectiveStepTicks * (solution.ccdWindowCentreCm1 / 400);
     const occurrencesAcrossCcd = Number(
-      (solution.ccdWindowCentreCm1 / Math.max(1, stepShiftCm1)).toFixed(1)
+      (
+        (params.spectrograph === 'Virsa'
+          ? lineWindowBounds.windowSpanCm1
+          : solution.ccdWindowCentreCm1) / Math.max(1, stepShiftCm1)
+      ).toFixed(1)
     );
 
     const effectiveExposureSec =
@@ -663,14 +683,89 @@ export function auditCalibrationFile(
     });
   }
 
+  // Compute lowest-wavenumber line CCD window and required step size for target hits/line
+  let lowestLineAnalysis: FileAuditReport['lowestLineAnalysis'] = null;
+  if (sortedParsed.length > 0) {
+    const lowestWavenumberCm1 =
+      sortedParsed[sortedParsed.length - 1].wavenumberCm1;
+    const highestWavenumberCm1 = sortedParsed[0].wavenumberCm1;
+    const boundsAtLowest = calculateCcdWindowBoundsCm1(
+      lowestWavenumberCm1,
+      params.gratingLinesPerMm,
+      params.ccdActiveWidthPx,
+      params.spectrograph,
+      params.ccdActiveXMinPx,
+      params.ccdActiveXMaxPx,
+      params.ccdZeroOrderCentrePx,
+      params.roomTemperatureC
+    );
+    const boundsAtHighest = calculateCcdWindowBoundsCm1(
+      highestWavenumberCm1,
+      params.gratingLinesPerMm,
+      params.ccdActiveWidthPx,
+      params.spectrograph,
+      params.ccdActiveXMinPx,
+      params.ccdActiveXMaxPx,
+      params.ccdZeroOrderCentrePx,
+      params.roomTemperatureC
+    );
+    const ccdWindowAtLowestCm1 = Number(boundsAtLowest.windowSpanCm1.toFixed(1));
+    const ccdWindowAtHighestCm1 = Number(
+      boundsAtHighest.windowSpanCm1.toFixed(1)
+    );
+    const targetHits = Math.max(2, params.targetOccurrencesPerLine);
+    const exactStepCm1ForTargetHits = Number(
+      (ccdWindowAtLowestCm1 / targetHits).toFixed(1)
+    );
+    const standardSteps = [
+      10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 100, 125, 150,
+    ];
+    const recommendedStepCm1AtLowest = standardSteps.reduce((prev, curr) =>
+      Math.abs(curr - exactStepCm1ForTargetHits) <
+      Math.abs(prev - exactStepCm1ForTargetHits)
+        ? curr
+        : prev
+    );
+    const achievedHitsAtLowestWithRecommendedStep = Number(
+      (ccdWindowAtLowestCm1 / recommendedStepCm1AtLowest).toFixed(1)
+    );
+    const achievedHitsAtLowestWithCurrentStep = Number(
+      (ccdWindowAtLowestCm1 / Math.max(1, solution.wireXStepAbsCm1)).toFixed(1)
+    );
+    const totalScansWithLowestStep = Math.round(
+      solution.scanSpanCm1 / Math.max(1, recommendedStepCm1AtLowest)
+    );
+
+    lowestLineAnalysis = {
+      lowestWavenumberCm1,
+      highestWavenumberCm1,
+      ccdWindowAtLowestCm1,
+      ccdWindowAtHighestCm1,
+      exactStepCm1ForTargetHits,
+      recommendedStepCm1AtLowest,
+      achievedHitsAtLowestWithRecommendedStep,
+      achievedHitsAtLowestWithCurrentStep,
+      totalScansWithLowestStep,
+    };
+  }
+
   // Check 5: Grating Turret Motor Step Size & CCD Occurrences
-  const fileStepTicks =
-    detectedHeaders.motorStepTicks ?? solution.recommendedMotorStepTicks;
-  const cm1PerTick = solution.ccdWindowCentreCm1 / 400;
-  const shiftPerStep = fileStepTicks * cm1PerTick;
+  const isVirsaAbsStep = params.spectrograph === 'Virsa';
+  const expectedStepValue = isVirsaAbsStep
+    ? (lowestLineAnalysis?.recommendedStepCm1AtLowest ??
+      solution.wireXStepAbsCm1)
+    : solution.recommendedMotorStepTicks;
+  const fileStepTicks = detectedHeaders.motorStepTicks ?? expectedStepValue;
+  const referenceWindowCm1 = isVirsaAbsStep
+    ? (lowestLineAnalysis?.ccdWindowAtLowestCm1 ?? solution.ccdWindowLowCm1)
+    : solution.ccdWindowCentreCm1;
+  const shiftPerStep = isVirsaAbsStep
+    ? fileStepTicks
+    : fileStepTicks * (solution.ccdWindowCentreCm1 / 400);
   const achievedOccurrences = Number(
-    (solution.ccdWindowCentreCm1 / Math.max(1, shiftPerStep)).toFixed(1)
+    (referenceWindowCm1 / Math.max(1, shiftPerStep)).toFixed(1)
   );
+  const stepUnitLabel = isVirsaAbsStep ? 'Abs cm⁻¹/scan' : 'steps/scan';
 
   if (achievedOccurrences < params.targetOccurrencesPerLine * 0.75) {
     diagnostics.push({
@@ -678,10 +773,10 @@ export function auditCalibrationFile(
       title: 'Turret Motor Step Size & CCD Peak Occurrences',
       category: 'Motor Step & CCD Coverage',
       status: 'fail',
-      measuredValue: `${fileStepTicks} steps/scan → ${achievedOccurrences} hits/CCD`,
-      expectedValue: `≤ ${solution.recommendedMotorStepTicks} steps/scan (≥ ${params.targetOccurrencesPerLine} hits across ${params.ccdActiveWidthPx} px)`,
-      summary: `Step size of ${fileStepTicks} motor ticks moves ${shiftPerStep.toFixed(1)} cm⁻¹ per scan, yielding only ${achievedOccurrences} occurrences of each line across the ${params.ccdActiveWidthPx} px active CCD window (target: ${params.targetOccurrencesPerLine}).`,
-      recommendation: `Reduce turret motor step size to ${solution.recommendedMotorStepTicks} steps so each Neon peak is sampled ${solution.achievedOccurrencesAtCentre} times across the lens/CCD field.`,
+      measuredValue: `${fileStepTicks} ${stepUnitLabel} → ${achievedOccurrences} hits/CCD`,
+      expectedValue: `≤ ${expectedStepValue} ${stepUnitLabel} (≥ ${params.targetOccurrencesPerLine} hits across ${params.ccdActiveWidthPx} px)`,
+      summary: `Step size of ${fileStepTicks} (${shiftPerStep.toFixed(1)} cm⁻¹ per scan) yields only ${achievedOccurrences} occurrences of each line across the ${params.ccdActiveWidthPx} px active CCD window (target: ${params.targetOccurrencesPerLine}).`,
+      recommendation: `Reduce turret step size to ${expectedStepValue} so each Neon peak is sampled ≥ ${params.targetOccurrencesPerLine} times across the lens/CCD field.`,
     });
   } else if (achievedOccurrences > params.targetOccurrencesPerLine * 1.8) {
     diagnostics.push({
@@ -689,10 +784,10 @@ export function auditCalibrationFile(
       title: 'Turret Motor Step Size & CCD Peak Occurrences',
       category: 'Motor Step & CCD Coverage',
       status: 'warning',
-      measuredValue: `${fileStepTicks} steps/scan → ${achievedOccurrences} hits/CCD`,
-      expectedValue: `${solution.recommendedMotorStepTicks} steps/scan (${params.targetOccurrencesPerLine} hits/CCD)`,
-      summary: `Step size of ${fileStepTicks} ticks oversamples each peak (${achievedOccurrences} occurrences), unnecessarily increasing calibration scan time.`,
-      recommendation: `Increase motor step size to ${solution.recommendedMotorStepTicks} ticks to achieve ${params.targetOccurrencesPerLine} occurrences with faster calibration throughput.`,
+      measuredValue: `${fileStepTicks} ${stepUnitLabel} → ${achievedOccurrences} hits/CCD`,
+      expectedValue: `${expectedStepValue} ${stepUnitLabel} (${params.targetOccurrencesPerLine} hits/CCD)`,
+      summary: `Step size of ${fileStepTicks} oversamples each peak (${achievedOccurrences} occurrences), unnecessarily increasing calibration scan time.`,
+      recommendation: `Increase step size to ${expectedStepValue} to achieve ${params.targetOccurrencesPerLine} occurrences with faster calibration throughput.`,
     });
   } else {
     diagnostics.push({
@@ -700,9 +795,9 @@ export function auditCalibrationFile(
       title: 'Turret Motor Step Size & CCD Peak Occurrences',
       category: 'Motor Step & CCD Coverage',
       status: 'pass',
-      measuredValue: `${fileStepTicks} steps/scan (${achievedOccurrences} hits across ${params.ccdActiveWidthPx} px)`,
-      expectedValue: `${solution.recommendedMotorStepTicks} steps/scan (${params.targetOccurrencesPerLine} hits target)`,
-      summary: `Motor step size achieves ${achievedOccurrences} repetitions of each Neon peak across the ${params.ccdActiveWidthPx}×${params.ccdActiveHeightPx} px (${params.ccdType}) active sensor region.`,
+      measuredValue: `${fileStepTicks} ${stepUnitLabel} (${achievedOccurrences} hits across ${params.ccdActiveWidthPx} px)`,
+      expectedValue: `${expectedStepValue} ${stepUnitLabel} (${params.targetOccurrencesPerLine} hits target)`,
+      summary: `Step size achieves ${achievedOccurrences} repetitions of each Neon peak across the ${params.ccdActiveWidthPx}×${params.ccdActiveHeightPx} px (${params.ccdType}) active sensor region.`,
     });
   }
 
@@ -751,68 +846,6 @@ export function auditCalibrationFile(
   const failCount = diagnostics.filter((d) => d.status === 'fail').length;
   const overallStatus =
     failCount > 0 ? 'FAIL' : warnCount > 0 ? 'WARN' : 'PASS';
-
-  // Compute lowest-wavenumber line CCD window and required step size for target hits/line
-  let lowestLineAnalysis: FileAuditReport['lowestLineAnalysis'] = null;
-  if (sortedParsed.length > 0) {
-    const lowestWavenumberCm1 =
-      sortedParsed[sortedParsed.length - 1].wavenumberCm1;
-    const highestWavenumberCm1 = sortedParsed[0].wavenumberCm1;
-    const boundsAtLowest = calculateCcdWindowBoundsCm1(
-      lowestWavenumberCm1,
-      params.gratingLinesPerMm,
-      params.ccdActiveWidthPx,
-      params.spectrograph,
-      params.ccdActiveXMinPx,
-      params.ccdActiveXMaxPx,
-      params.ccdZeroOrderCentrePx
-    );
-    const boundsAtHighest = calculateCcdWindowBoundsCm1(
-      highestWavenumberCm1,
-      params.gratingLinesPerMm,
-      params.ccdActiveWidthPx,
-      params.spectrograph,
-      params.ccdActiveXMinPx,
-      params.ccdActiveXMaxPx,
-      params.ccdZeroOrderCentrePx
-    );
-    const ccdWindowAtLowestCm1 = Number(boundsAtLowest.windowSpanCm1.toFixed(1));
-    const ccdWindowAtHighestCm1 = Number(
-      boundsAtHighest.windowSpanCm1.toFixed(1)
-    );
-    const targetHits = Math.max(2, params.targetOccurrencesPerLine);
-    const exactStepCm1ForTargetHits = Number(
-      (ccdWindowAtLowestCm1 / targetHits).toFixed(1)
-    );
-    const standardSteps = [10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 100, 125, 150];
-    const recommendedStepCm1AtLowest = standardSteps.reduce((prev, curr) =>
-      Math.abs(curr - exactStepCm1ForTargetHits) <
-      Math.abs(prev - exactStepCm1ForTargetHits)
-        ? curr
-        : prev
-    );
-    const achievedHitsAtLowestWithRecommendedStep = Number(
-      (ccdWindowAtLowestCm1 / recommendedStepCm1AtLowest).toFixed(1)
-    );
-    const achievedHitsAtLowestWithCurrentStep = Number(
-      (ccdWindowAtLowestCm1 / Math.max(1, solution.wireXStepAbsCm1)).toFixed(1)
-    );
-    const totalScansWithLowestStep = Math.round(
-      solution.scanSpanCm1 / Math.max(1, recommendedStepCm1AtLowest)
-    );
-
-    lowestLineAnalysis = {
-      lowestWavenumberCm1,
-      highestWavenumberCm1,
-      ccdWindowAtLowestCm1,
-      ccdWindowAtHighestCm1,
-      exactStepCm1ForTargetHits,
-      recommendedStepCm1AtLowest,
-      achievedHitsAtLowestWithRecommendedStep,
-      achievedHitsAtLowestWithCurrentStep,
-      totalScansWithLowestStep,
-    };
-  }
 
   const spectralOriginSummary = analyzeSpectralLineBatch(parsedLines);
 

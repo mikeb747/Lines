@@ -20,7 +20,7 @@ export const FactoryMatrixView: React.FC<FactoryMatrixViewProps> = ({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
             Factory Spectrograph Calibration Reference Matrix (Virsa / inVia /
-            Strava)
+            Strada)
           </h3>
           <p className="text-xs text-slate-500">
             Standardized Raman shift bounds, Absolute wavenumber windows,
@@ -42,7 +42,7 @@ export const FactoryMatrixView: React.FC<FactoryMatrixViewProps> = ({
                 <th className="py-2.5 px-3 text-right">Scan Range (cm⁻¹)</th>
                 <th className="py-2.5 px-3 text-right">Primary PCL (cm⁻¹)</th>
                 <th className="py-2.5 px-3 text-right">2nd Cal Line (cm⁻¹)</th>
-                <th className="py-2.5 px-3 text-right">Motor Step</th>
+                <th className="py-2.5 px-3 text-right">Cal Step (Abs cm⁻¹)</th>
                 <th className="py-2.5 pl-3 text-right">Action</th>
               </tr>
             </thead>
@@ -84,7 +84,7 @@ export const FactoryMatrixView: React.FC<FactoryMatrixViewProps> = ({
                         '—'}
                     </td>
                     <td className="py-3 px-3 text-right text-slate-700">
-                      {sol.recommendedMotorStepTicks} ticks
+                      {sol.wireXStepAbsCm1} cm⁻¹ ({sol.wireXTotalScanCount} scans)
                     </td>
                     <td className="py-3 pl-3 text-right font-sans">
                       <button

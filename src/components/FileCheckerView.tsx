@@ -118,7 +118,8 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
     params.spectrograph,
     params.ccdActiveXMinPx,
     params.ccdActiveXMaxPx,
-    params.ccdZeroOrderCentrePx
+    params.ccdZeroOrderCentrePx,
+    params.roomTemperatureC
   );
 
   const endViewBounds = calculateCcdWindowBoundsCm1(
@@ -128,7 +129,8 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
     params.spectrograph,
     params.ccdActiveXMinPx,
     params.ccdActiveXMaxPx,
-    params.ccdZeroOrderCentrePx
+    params.ccdZeroOrderCentrePx,
+    params.roomTemperatureC
   );
 
   const lowestLineViewBounds = lowestLineAnalysis
@@ -139,7 +141,8 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
         params.spectrograph,
         params.ccdActiveXMinPx,
         params.ccdActiveXMaxPx,
-        params.ccdZeroOrderCentrePx
+        params.ccdZeroOrderCentrePx,
+        params.roomTemperatureC
       )
     : null;
 
@@ -760,8 +763,11 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs text-slate-600">
                 Comparing measured wavenumbers against{' '}
-                <strong>NIST Air (20 °C, 1 atm, n ≈ 1.000277)</strong> and{' '}
-                <strong>NIST Vacuum (ν̃_vac = ν̃_air / n_air)</strong> plus
+                <strong>
+                  NIST Air ({(params.roomTemperatureC ?? 20).toFixed(1)} °C, 1
+                  atm, n ≈ {solution.thermalOptics.airRefractiveIndex.toFixed(6)})
+                </strong>{' '}
+                and <strong>NIST Vacuum (ν̃_vac = ν̃_air / n_air)</strong> plus
                 diffraction order folding (ν̃_app = ν̃_true / m).
               </div>
 

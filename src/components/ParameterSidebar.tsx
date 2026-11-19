@@ -2,13 +2,14 @@ import React from 'react';
 import {
   applyCcdArchitecture,
   applySpectrographModel,
+  calculateThermalOpticsState,
   CalibrationParameters,
   CCDArchitecture,
   FilterType,
   SpectrographModel,
 } from '../calibration/physicsEngine';
 import { FACTORY_PRESETS, FactoryPreset } from '../calibration/presets';
-import { Sliders, RotateCcw } from 'lucide-react';
+import { Sliders, RotateCcw, Thermometer } from 'lucide-react';
 import { DeferredNumberInput } from './DeferredNumberInput';
 
 interface ParameterSidebarProps {
@@ -21,7 +22,8 @@ interface ParameterSidebarProps {
 
 const LASER_OPTIONS = [405, 457, 532, 633, 660, 785, 830];
 const GRATING_OPTIONS = [600, 1200, 1500, 1800, 2400, 3000];
-const SPECTROGRAPH_OPTIONS: SpectrographModel[] = ['inVia', 'Virsa', 'Strava'];
+const SPECTROGRAPH_OPTIONS: SpectrographModel[] = ['inVia', 'Virsa', 'Strada'];
+const ROOM_TEMP_PRESETS = [15, 18, 20, 23, 25, 30];
 
 export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   params,
@@ -175,6 +177,78 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             ))}
           </div>
         </div>
+
+        {/* Room Temperature (°C) — Physical Thermo-Optic & Air Refractive Index Control */}
+        {(() => {
+          const roomTempC = params.roomTemperatureC ?? 20;
+          const thermal = calculateThermalOpticsState(
+            17086.75,
+            params.gratingLinesPerMm,
+            params.spectrograph,
+            roomTempC
+          );
+          const driftSign = thermal.thermalWavenumberDriftCm1 > 0 ? '+' : '';
+          const pxSign = thermal.thermalPixelDriftPx > 0 ? '+' : '';
+          return (
+            <div className="pt-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  htmlFor="room-temp-input"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-600"
+                >
+                  <Thermometer className="h-3.5 w-3.5 text-cyan-600" />
+                  <span>Room Temperature (°C)</span>
+                </label>
+                <span className="font-mono text-[11px] text-slate-500 tabular-nums">
+                  n_air = {thermal.airRefractiveIndex.toFixed(6)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1 mb-2">
+                {ROOM_TEMP_PRESETS.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => update('roomTemperatureC', t)}
+                    className={`rounded-md border py-1 text-xs font-mono font-medium transition-colors whitespace-nowrap ${
+                      Math.abs(roomTempC - t) < 0.05
+                        ? 'border-cyan-600 bg-cyan-50 text-cyan-900'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t}°
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <DeferredNumberInput
+                  id="room-temp-input"
+                  min={-10}
+                  max={50}
+                  ariaLabel="Room Temperature (Celsius)"
+                  value={roomTempC}
+                  onCommit={(val) => update('roomTemperatureC', val)}
+                  className="w-24 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-xs text-slate-900 tabular-nums focus:border-cyan-600 focus:outline-none"
+                />
+                <div className="flex-1 text-[11px] font-mono text-slate-500 tabular-nums truncate">
+                  {Math.abs(thermal.deltaTempFromRefC) < 0.05 ? (
+                    <span className="text-emerald-700">
+                      20.0 °C Cal Ref (0.00 cm⁻¹ drift)
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 font-medium">
+                      Δν̃: {driftSign}
+                      {thermal.thermalWavenumberDriftCm1.toFixed(2)} cm⁻¹ (
+                      {pxSign}
+                      {thermal.thermalPixelDriftPx.toFixed(2)} px)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <hr className="border-slate-200" />

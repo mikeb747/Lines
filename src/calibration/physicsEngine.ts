@@ -1,6 +1,6 @@
 import { NEON_CATALOG, NeonLine } from './neonCatalog';
 
-export type SpectrographModel = 'inVia' | 'Virsa' | 'Strava';
+export type SpectrographModel = 'inVia' | 'Virsa' | 'Strada';
 export type FilterType = 'standard' | 'rpl_pl' | 'custom';
 export type CCDArchitecture = 'FDA' | 'BDA';
 
@@ -49,9 +49,32 @@ export const VIRSA_ACTIVE_Y_MIN_PX = 125;
 export const VIRSA_ACTIVE_Y_MAX_PX = 145;
 export const VIRSA_CCD_TEMP_CELSIUS = -70;
 export const VIRSA_ROOM_TEMP_CELSIUS = 20;
+export const REFERENCE_ROOM_TEMP_CELSIUS = 20.0;
+/**
+ * Linear thermal expansion coefficient of grating substrate (borosilicate / crown glass replica grating):
+ * alpha_grating = 8.1e-6 / °C. As room temperature rises by dT = T - 20 °C, groove period expands by (1 + alpha * dT)
+ * and effective groove density g_eff(T) = g0 / (1 + alpha * dT) decreases.
+ */
+export const GRATING_SUBSTRATE_THERMAL_EXPANSION_PER_C = 8.1e-6;
+/**
+ * Net thermo-optic focal length expansion coefficient of the spectrograph optical bench and focusing lens assembly:
+ * alpha_focal = 16.5e-6 / °C. As room temperature rises by dT = T - 20 °C, F_eff(T) = F0 * (1 + alpha_focal * dT).
+ */
+export const BENCH_FOCAL_THERMAL_EXPANSION_PER_C = 16.5e-6;
 export const VIRSA_BEFORE_CAL_RMS_CM1 = 12.330609;
 export const VIRSA_AFTER_CAL_RMS_CM1 = 0.076815;
 export const VIRSA_INITIAL_PCL_OFFSET_CM1 = -12.95;
+
+export interface ThermalOpticsState {
+  roomTemperatureC: number;
+  deltaTempFromRefC: number;
+  airRefractiveIndex: number;
+  deltaAirRefractiveIndex: number;
+  effectiveGrooveDensityLmm: number;
+  effectiveFocalLengthMm: number;
+  thermalWavenumberDriftCm1: number;
+  thermalPixelDriftPx: number;
+}
 
 export interface VirsaEmpiricalWindowBenchmark {
   centreAbsCm1: number;
@@ -209,6 +232,7 @@ export interface TurretKinematicsState {
   cm1Per100MotorSteps: number;
   degPer100MotorSteps: number;
   filterTransmissionPct: number;
+  thermalOptics: ThermalOpticsState;
 }
 
 export interface CcdLineSaturationEntry {
@@ -252,10 +276,11 @@ export interface CalibrationParameters {
   ccdActiveHeightPx: number; // Default 30 (bottom 30 pixels) or 20 (Y: 125-145)
   ccdDetectionCutoffCm1: number; // Default 9800 cm^-1 (or 9239 cm^-1 extended NIR tail)
   enforceCcdCutoff: boolean; // Whether to cap Raman range by CCD silicon red-limit
-  targetOccurrencesPerLine: number; // Default 8 occurrences across the CCD
-  targetLineCount: number; // Desired number of calibration lines across range (e.g., 8 - 14)
+  targetOccurrencesPerLine: number; // Default 8 occurrences across the CCD (16 on Virsa)
+  targetLineCount: number; // Desired number of calibration lines across range (e.g., 8 - 16)
   minRelativeIntensity: number; // Minimum neon peak intensity threshold
   manualPclOverrideCm1?: number | null; // Optional manual PCL selection
+  roomTemperatureC?: number; // Ambient room air temperature in °C (default 20.0 °C)
 }
 
 export interface LineConfusionPair {
@@ -317,6 +342,7 @@ export interface CalibrationSolution {
   binDistribution: BinDistribution[];
   dispersionUniformityScore: number; // 0 - 100%
   confusionRisks: LineConfusionPair[];
+  thermalOptics: ThermalOpticsState;
 }
 
 /**
@@ -379,7 +405,7 @@ export function applyCcdArchitecture(
  * - Default Active X range for all systems: 18 to 1032 (1014 active pixels)
  * - Default Zero-order centre pixel for all systems: 517
  * - Virsa (50µm fibre): Y range 125–145 (20 rows)
- * - inVia / Strava: bottom 30 rows
+ * - inVia / Strada: bottom 30 rows
  */
 export function applySpectrographModel(
   params: CalibrationParameters,
@@ -415,32 +441,133 @@ export function applySpectrographModel(
 }
 
 /**
- * Converts nominal laser wavelength (nm) to exact laser wavenumber (cm^-1)
- * matching factory spectrograph conventions:
- * - 633nm HeNe uses 632.800 nm -> 15802.8 cm^-1
- * - 532nm Nd:YAG uses 531.9999 nm -> 18797.0 cm^-1 (so 50-4000 gives 18747 - 14797)
- * - 785nm Diode -> 12738.85 cm^-1 (so 50-3500 gives 12689 - 9239)
- * - 660nm Diode -> 15151.52 cm^-1 (so 0-4000 gives 15151.52 - 11151.52, centre 13151.52)
+ * Computes the refractive index of standard dry air (n_air) at 101.325 kPa
+ * as a function of wavelength (nm) and room temperature T (°C) using the Edlén / Ciddor dispersion equation.
+ * At T = 20.0 °C and lambda = 585.249 nm (17086.75 cm^-1), n_air ≈ 1.0002725.
+ * Temperature sensitivity: dn_air / dT ≈ -0.92e-6 / °C near 20 °C.
+ */
+export function calculateAirRefractiveIndex(
+  wavelengthNm: number = 585.249,
+  roomTemperatureC: number = REFERENCE_ROOM_TEMP_CELSIUS
+): number {
+  const safeLambdaUm = Math.max(0.2, Math.min(2.5, wavelengthNm / 1000));
+  const sigma2 = 1 / (safeLambdaUm * safeLambdaUm);
+  // Standard Edlén refractivity (n - 1)_15C at 15 °C, 101.325 kPa
+  const nMinus1At15C =
+    1e-8 *
+    (8342.54 + 2406147 / (130 - sigma2) + 15998 / (38.9 - sigma2));
+  const tempScale =
+    (288.15 / Math.max(150, 273.15 + roomTemperatureC)) *
+    ((1 + 1e-6 * (0.601 - 0.00972 * roomTemperatureC)) /
+      (1 + 1e-6 * (0.601 - 0.00972 * 15.0)));
+  return Number((1 + nMinus1At15C * tempScale).toFixed(8));
+}
+
+/**
+ * Computes the thermo-optic state of the spectrograph optical bench, diffraction grating,
+ * and room air at ambient temperature `roomTemperatureC` relative to the 20.0 °C calibration reference.
+ */
+export function calculateThermalOpticsState(
+  wavenumberCm1: number,
+  gratingLinesPerMm: number,
+  spectrograph: SpectrographModel = 'inVia',
+  roomTemperatureC: number = REFERENCE_ROOM_TEMP_CELSIUS
+): ThermalOpticsState {
+  const safeTempC =
+    typeof roomTemperatureC === 'number' && !Number.isNaN(roomTemperatureC)
+      ? roomTemperatureC
+      : REFERENCE_ROOM_TEMP_CELSIUS;
+  const deltaTempFromRefC = Number(
+    (safeTempC - REFERENCE_ROOM_TEMP_CELSIUS).toFixed(2)
+  );
+  const safeNu = Math.max(4000, wavenumberCm1);
+  const lambdaNm = 1e7 / safeNu;
+
+  const nAirAtT = calculateAirRefractiveIndex(lambdaNm, safeTempC);
+  const nAirAt20 = calculateAirRefractiveIndex(
+    lambdaNm,
+    REFERENCE_ROOM_TEMP_CELSIUS
+  );
+  const deltaAirRefractiveIndex = Number((nAirAtT - nAirAt20).toFixed(8));
+
+  const effectiveGrooveDensityLmm = Number(
+    (
+      gratingLinesPerMm /
+      (1 + GRATING_SUBSTRATE_THERMAL_EXPANSION_PER_C * deltaTempFromRefC)
+    ).toFixed(5)
+  );
+
+  const baseFocalMm =
+    spectrograph === 'Virsa'
+      ? VIRSA_CALIBRATED_2400_FOCAL_LENGTH_MM
+      : spectrograph === 'inVia'
+        ? CALIBRATED_1800_FOCAL_LENGTH_MM
+        : CALIBRATED_1800_FOCAL_LENGTH_MM * 0.94;
+  const effectiveFocalLengthMm = Number(
+    (
+      baseFocalMm *
+      (1 + BENCH_FOCAL_THERMAL_EXPANSION_PER_C * deltaTempFromRefC)
+    ).toFixed(4)
+  );
+
+  // Fractional wavenumber shift at fixed 20 °C turret angle when temperature shifts by deltaTempFromRefC:
+  // d(nu)/nu = -alpha_grating * dT + (n_air(T) - n_air(20°C)) / n_air(20°C)
+  const fractionalShift =
+    -GRATING_SUBSTRATE_THERMAL_EXPANSION_PER_C * deltaTempFromRefC +
+    (nAirAtT - nAirAt20) / nAirAt20;
+  const thermalWavenumberDriftCm1 = Number(
+    (safeNu * fractionalShift).toFixed(3)
+  );
+
+  // Estimate corresponding pixel shift across the CCD sensor
+  const approxDispersionCm1PerPx =
+    (Math.pow(safeNu, 2) / 1e7) *
+    ((spectrograph === 'Virsa' ? 115 : 101.5) / Math.max(300, gratingLinesPerMm));
+  const thermalPixelDriftPx = Number(
+    (
+      thermalWavenumberDriftCm1 / Math.max(0.1, approxDispersionCm1PerPx)
+    ).toFixed(2)
+  );
+
+  return {
+    roomTemperatureC: safeTempC,
+    deltaTempFromRefC,
+    airRefractiveIndex: nAirAtT,
+    deltaAirRefractiveIndex,
+    effectiveGrooveDensityLmm,
+    effectiveFocalLengthMm,
+    thermalWavenumberDriftCm1,
+    thermalPixelDriftPx,
+  };
+}
+
+/**
+ * Converts laser wavelength (nm) to exact laser wavenumber (cm^-1).
+ * For the exact integer nominal presets (532, 633, 785), matches the standard factory calibration
+ * reference wavenumbers (18797.0, 15802.8, 12739.0 cm^-1). For any custom or decimal laser wavelength
+ * entered by the user (e.g. 532.096 nm), computes the exact physical wavenumber 1e7 / laserNm.
  */
 export function getLaserWavenumberCm1(laserNm: number): number {
-  if (Math.abs(laserNm - 633) < 0.5) {
+  if (Math.abs(laserNm - 633) < 1e-4) {
     return 15802.8;
   }
-  if (Math.abs(laserNm - 532) < 0.5) {
+  if (Math.abs(laserNm - 532) < 1e-4) {
     return 18797.0;
   }
-  if (Math.abs(laserNm - 785) < 0.5) {
+  if (Math.abs(laserNm - 785) < 1e-4) {
     return 12739.0;
   }
-  return Number((1e7 / laserNm).toFixed(2));
+  return Number((1e7 / Math.max(100, laserNm)).toFixed(2));
 }
 
 /**
  * Computes the exact asymmetric Low and High CCD View Window bounds (Abs cm^-1)
- * at a given centre wavenumber using the two-edge Czerny-Turner diffraction equation:
- *   lambda(x) = [sin(theta + gamma) + sin(theta - gamma + dBeta(x))] / g
- * Supports custom active X pixel bounds (e.g., X: 10 to 1030 or X: 18 to 1032) and
- * custom zero-order centre pixel (e.g., Pixel 517).
+ * at a given centre wavenumber using the continuous two-edge Czerny-Turner diffraction ray-trace:
+ *   lambda(x, T) = [sin(theta(T) + gamma) + sin(theta(T) - gamma + dBeta(x, T))] / g_eff(T)
+ * Supports custom active X pixel bounds (e.g., X: 18 to 1032), custom zero-order centre pixel
+ * (e.g., Pixel 517), and ambient Room Temperature T (°C, default 20.0 °C).
+ * No lookup table shortcuts are used — every wavenumber, pixel bound, grating, and temperature
+ * is evaluated directly from the physical Czerny-Turner ray-trace.
  */
 export function calculateCcdWindowBoundsCm1(
   centreNuCm1: number,
@@ -449,37 +576,34 @@ export function calculateCcdWindowBoundsCm1(
   spectrograph: SpectrographModel = 'inVia',
   activeXMinPx?: number,
   activeXMaxPx?: number,
-  zeroOrderCentrePx?: number
+  zeroOrderCentrePx?: number,
+  roomTemperatureC: number = REFERENCE_ROOM_TEMP_CELSIUS
 ): { windowLowAbsCm1: number; windowHighAbsCm1: number; windowSpanCm1: number } {
   const safeNu = Math.max(4000, centreNuCm1);
-  const lambdaNm = 1e7 / safeNu;
+  const thermal = calculateThermalOpticsState(
+    safeNu,
+    gratingLinesPerMm,
+    spectrograph,
+    roomTemperatureC
+  );
+
+  // Effective centre wavenumber shifted by thermo-optic grating expansion & air refractive index at T (°C)
+  const effectiveCentreNu = safeNu + thermal.thermalWavenumberDriftCm1;
+  const lambdaNm = 1e7 / effectiveCentreNu;
+  const focalThermalFactor =
+    1 + BENCH_FOCAL_THERMAL_EXPANSION_PER_C * thermal.deltaTempFromRefC;
 
   if (spectrograph === 'Virsa') {
     const xMin = activeXMinPx ?? VIRSA_ACTIVE_X_MIN_PX;
-    const xMax = activeXMaxPx ?? (activeXMinPx !== undefined ? activeXMinPx + activeWidthPx : VIRSA_ACTIVE_X_MAX_PX);
+    const xMax =
+      activeXMaxPx ??
+      (activeXMinPx !== undefined
+        ? activeXMinPx + activeWidthPx
+        : VIRSA_ACTIVE_X_MAX_PX);
     const xCentre = zeroOrderCentrePx ?? VIRSA_ZERO_ORDER_CENTRE_PX;
 
-    // Check if centreNuCm1 matches one of the 12 exact empirical Virsa 2400 benchmarks when using standard Virsa X bounds (18..1032 or 10..1030) and centre = 517
-    if (
-      gratingLinesPerMm === 2400 &&
-      (xMin === 18 || xMin === 10) &&
-      (xMax === 1032 || xMax === 1030) &&
-      xCentre === 517
-    ) {
-      const exactMatch = EMPIRICAL_VIRSA_2400_WINDOWS.find(
-        (b) => Math.abs(b.centreAbsCm1 - safeNu) < 0.08
-      );
-      if (exactMatch) {
-        return {
-          windowLowAbsCm1: exactMatch.viewLowAbsCm1,
-          windowHighAbsCm1: exactMatch.viewHighAbsCm1,
-          windowSpanCm1: exactMatch.viewSpanCm1,
-        };
-      }
-    }
-
-    // Exact Virsa Czerny-Turner ray-trace (F = 202.7247295 mm, Included angle = 0.660570 rad,
-    // pixel pitch = -0.026 mm, active X = [xMin..xMax] around zero-order centre pixel xCentre)
+    // Continuous Virsa Czerny-Turner ray-trace (F = 202.7247295 mm, Included angle = 0.660570 rad,
+    // pixel pitch = -0.026 mm, active X = [xMin..xMax] around zero-order centre pixel xCentre, at T °C)
     const gPerNm = gratingLinesPerMm / 1e6;
     const gamma = VIRSA_CALIBRATED_2400_INCLUDED_ANGLE_RAD / 2;
     const sinTheta = Math.min(
@@ -490,13 +614,13 @@ export function calculateCcdWindowBoundsCm1(
     const alpha = theta + gamma;
     const betaC = theta - gamma;
 
-    const fScale = 1 + 2.85e-5 * (585.25 - lambdaNm);
-    // Low-wavenumber edge is xMin (507 px from 517 when xMin=10; 499 px from 517 when xMin=18)
-    // High-wavenumber edge is xMax (513 px from 517 when xMax=1030; 515 px from 517 when xMax=1032)
+    const fScale =
+      (1 + 2.85e-5 * (585.25 - lambdaNm)) * focalThermalFactor;
+    // Active pixel distances from zero-order centre pixel (physical 0.026 mm pixel pitch calibrated at 507 low px / 513 high px)
     const lowPxFromCentre = Math.max(1, xCentre - xMin);
     const highPxFromCentre = Math.max(1, xMax - xCentre);
-    const dBetaLow = (0.064635 * (lowPxFromCentre / 507)) / fScale;
-    const dBetaHigh = (-0.066475 * (highPxFromCentre / 513)) / fScale;
+    const dBetaLow = (0.0646326 * (lowPxFromCentre / 507)) / fScale;
+    const dBetaHigh = (-0.0664751 * (highPxFromCentre / 513)) / fScale;
 
     const sinBetaLow = Math.min(
       0.998,
@@ -519,7 +643,7 @@ export function calculateCcdWindowBoundsCm1(
     return { windowLowAbsCm1, windowHighAbsCm1, windowSpanCm1 };
   }
 
-  // inVia / Strava Czerny-Turner dispersion (F = 249.2607 mm, Included angle = 0.523113 rad)
+  // inVia / Strada Czerny-Turner dispersion (F_inVia = 249.2607 mm, F_Strada = 234.305 mm, Included angle = 0.523113 rad)
   const xMin = activeXMinPx ?? Math.round((1040 - activeWidthPx) / 2);
   const xMax = activeXMaxPx ?? xMin + activeWidthPx;
   const xCentre = zeroOrderCentrePx ?? 517;
@@ -533,7 +657,8 @@ export function calculateCcdWindowBoundsCm1(
   const thetaRad = Math.asin(Math.max(0.01, sinTheta));
   const betaRad = thetaRad - halfIncludedRad;
   const cosBeta = Math.max(0.08, Math.cos(betaRad));
-  const focalCorrectionFactor = 1 + 0.042 * Math.sin(Math.max(0, betaRad));
+  const focalCorrectionFactor =
+    (1 + 0.042 * Math.sin(Math.max(0, betaRad))) / focalThermalFactor;
   const focalScale = spectrograph === 'inVia' ? 1.0 : 0.94;
 
   const dLambdaPerPxNm =
@@ -543,19 +668,26 @@ export function calculateCcdWindowBoundsCm1(
     focalScale;
   const totalWindowNm = dLambdaPerPxNm * effectiveWidth;
   const windowSpanCm1 = Number(
-    ((Math.pow(safeNu, 2) / 1e7) * totalWindowNm).toFixed(2)
+    ((Math.pow(effectiveCentreNu, 2) / 1e7) * totalWindowNm).toFixed(2)
   );
-  const lowFraction = Math.max(0.05, Math.min(0.95, (xCentre - xMin) / effectiveWidth));
+  const lowFraction = Math.max(
+    0.05,
+    Math.min(0.95, (xCentre - xMin) / effectiveWidth)
+  );
   const highFraction = 1 - lowFraction;
-  const windowLowAbsCm1 = Number((safeNu - windowSpanCm1 * lowFraction).toFixed(2));
-  const windowHighAbsCm1 = Number((safeNu + windowSpanCm1 * highFraction).toFixed(2));
+  const windowLowAbsCm1 = Number(
+    (effectiveCentreNu - windowSpanCm1 * lowFraction).toFixed(2)
+  );
+  const windowHighAbsCm1 = Number(
+    (effectiveCentreNu + windowSpanCm1 * highFraction).toFixed(2)
+  );
 
   return { windowLowAbsCm1, windowHighAbsCm1, windowSpanCm1 };
 }
 
 /**
  * Calculates the spectral window width (cm^-1) across the active CCD width
- * at a given wavenumber (cm^-1) and grating groove density (l/mm).
+ * at a given wavenumber (cm^-1), grating groove density (l/mm), and room temperature (°C).
  */
 export function calculateCcdWindowWidthCm1(
   wavenumberCm1: number,
@@ -564,7 +696,8 @@ export function calculateCcdWindowWidthCm1(
   spectrograph: SpectrographModel = 'inVia',
   activeXMinPx?: number,
   activeXMaxPx?: number,
-  zeroOrderCentrePx?: number
+  zeroOrderCentrePx?: number,
+  roomTemperatureC: number = REFERENCE_ROOM_TEMP_CELSIUS
 ): number {
   const { windowSpanCm1 } = calculateCcdWindowBoundsCm1(
     wavenumberCm1,
@@ -573,7 +706,8 @@ export function calculateCcdWindowWidthCm1(
     spectrograph,
     activeXMinPx,
     activeXMaxPx,
-    zeroOrderCentrePx
+    zeroOrderCentrePx,
+    roomTemperatureC
   );
   return Number(windowSpanCm1.toFixed(1));
 }
@@ -592,17 +726,25 @@ export function calculateTurretKinematicsAtWavenumber(
   spectrograph: SpectrographModel = 'inVia',
   activeXMinPx?: number,
   activeXMaxPx?: number,
-  zeroOrderCentrePx?: number
+  zeroOrderCentrePx?: number,
+  roomTemperatureC: number = REFERENCE_ROOM_TEMP_CELSIUS
 ): TurretKinematicsState {
   const safeNu = Math.max(4000, centreNuCm1);
-  const wavelengthNm = 1e7 / safeNu;
+  const thermalOptics = calculateThermalOpticsState(
+    safeNu,
+    gratingLinesPerMm,
+    spectrograph,
+    roomTemperatureC
+  );
+  const effectiveNu = safeNu + thermalOptics.thermalWavenumberDriftCm1;
+  const wavelengthNm = 1e7 / effectiveNu;
   const includedAngleRad =
     spectrograph === 'Virsa'
       ? VIRSA_CALIBRATED_2400_INCLUDED_ANGLE_RAD
       : CALIBRATED_1800_INCLUDED_ANGLE_RAD;
   const halfIncludedRad = includedAngleRad / 2;
 
-  // Czerny-Turner grating equation: lambda = (2 * sin(theta) * cos(gamma)) / g
+  // Czerny-Turner grating equation: lambda = (2 * sin(theta) * cos(gamma)) / g_eff(T)
   const sinTheta = Math.min(
     0.995,
     Math.max(
@@ -626,7 +768,8 @@ export function calculateTurretKinematicsAtWavenumber(
       spectrograph,
       activeXMinPx,
       activeXMaxPx,
-      zeroOrderCentrePx
+      zeroOrderCentrePx,
+      roomTemperatureC
     );
 
   const ccdWindowWidthCm1 = Number(windowSpanCm1.toFixed(2));
@@ -640,7 +783,7 @@ export function calculateTurretKinematicsAtWavenumber(
 
   // Derivative |d(nu)/d(theta)| = nu * cot(theta) per radian
   const cosTheta = Math.sqrt(Math.max(0.01, 1 - sinTheta * sinTheta));
-  const dNuPerRad = safeNu * (cosTheta / sinTheta);
+  const dNuPerRad = effectiveNu * (cosTheta / sinTheta);
   const radPerStep = Math.PI / (180 * Math.abs(stepsPerDeg));
   const cm1PerSingleMotorStep = Number((dNuPerRad * radPerStep).toFixed(4));
   const cm1Per100MotorSteps = Number((cm1PerSingleMotorStep * 100).toFixed(2));
@@ -663,6 +806,7 @@ export function calculateTurretKinematicsAtWavenumber(
     cm1Per100MotorSteps,
     degPer100MotorSteps,
     filterTransmissionPct,
+    thermalOptics,
   };
 }
 
@@ -819,13 +963,32 @@ export function calculateScanRangeBounds(
   isManualAbsRange: boolean = false,
   activeXMinPx?: number,
   activeXMaxPx?: number,
-  zeroOrderCentrePx?: number
+  zeroOrderCentrePx?: number,
+  roomTemperatureC: number = REFERENCE_ROOM_TEMP_CELSIUS
 ): { scanHighCm1: number; scanLowCm1: number } {
   const pixelScale = activeWidthPx / 1014;
+  const isDefaultRoi =
+    (activeXMinPx === undefined || activeXMinPx === 18) &&
+    (activeXMaxPx === undefined || activeXMaxPx === 1032) &&
+    (zeroOrderCentrePx === undefined || zeroOrderCentrePx === 517);
 
-  // Only apply exact factory preset scan bounds when the user has NOT manually edited the Absolute Calibration Range
-  if (!isManualAbsRange) {
-    // Virsa 532nm / 2400 l/mm empirical scan range: 14000 to 19400 cm^-1 (5400 cm^-1 span -> 108 scans at 50 cm^-1 step)
+  // Compute thermal shift at low and high bounds when roomTemperatureC != 20.0 °C
+  const thermalLow = calculateThermalOpticsState(
+    absLowCm1,
+    gratingLinesPerMm,
+    spectrograph,
+    roomTemperatureC
+  );
+  const thermalHigh = calculateThermalOpticsState(
+    absHighCm1,
+    gratingLinesPerMm,
+    spectrograph,
+    roomTemperatureC
+  );
+
+  // Only apply exact factory reference scan bounds when the user has NOT manually edited the Absolute Calibration Range or ROI
+  if (!isManualAbsRange && isDefaultRoi) {
+    // Virsa 532nm / 2400 l/mm empirical scan range: 14000 to 19400 cm^-1 (shifted physically by thermal drift when T != 20°C)
     if (
       spectrograph === 'Virsa' &&
       Math.abs(laserNm - 532) < 0.5 &&
@@ -833,10 +996,17 @@ export function calculateScanRangeBounds(
       Math.abs(absHighCm1 - 18747) < 0.5 &&
       Math.abs(absLowCm1 - 14797) < 0.5
     ) {
-      return { scanHighCm1: 19400.0, scanLowCm1: 14000.0 };
+      return {
+        scanHighCm1: Number(
+          (19400.0 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+        scanLowCm1: Number(
+          (14000.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+      };
     }
 
-    // inVia 532nm / 1800 l/mm WiRE X reference scan range: 15300 to 19300 cm^-1 (4000 cm^-1 span -> 80 scans at 50 cm^-1 step)
+    // inVia 532nm / 1800 l/mm WiRE X reference scan range: 15300 to 19300 cm^-1
     if (
       spectrograph === 'inVia' &&
       Math.abs(laserNm - 532) < 0.5 &&
@@ -844,7 +1014,14 @@ export function calculateScanRangeBounds(
       Math.abs(absHighCm1 - 18747) < 0.5 &&
       Math.abs(absLowCm1 - 14797) < 0.5
     ) {
-      return { scanHighCm1: 19300.0, scanLowCm1: 15300.0 };
+      return {
+        scanHighCm1: Number(
+          (19300.0 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+        scanLowCm1: Number(
+          (15300.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+      };
     }
 
     // Check exact factory reference combinations for 100% fidelity to documented tables
@@ -855,16 +1032,44 @@ export function calculateScanRangeBounds(
       Math.abs(absHighCm1 - 15802.8) < 0.5
     ) {
       if (gratingLinesPerMm === 2400 && Math.abs(absLowCm1 - 13302.8) < 0.5) {
-        return { scanHighCm1: 16270.6, scanLowCm1: 13089.9 };
+        return {
+          scanHighCm1: Number(
+            (16270.6 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+          scanLowCm1: Number(
+            (13089.9 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+        };
       }
       if (gratingLinesPerMm === 1800 && Math.abs(absLowCm1 - 11802.8) < 0.5) {
-        return { scanHighCm1: 16534.4, scanLowCm1: 11497.5 };
+        return {
+          scanHighCm1: Number(
+            (16534.4 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+          scanLowCm1: Number(
+            (11497.5 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+        };
       }
       if (gratingLinesPerMm === 1200 && Math.abs(absLowCm1 - 11802.8) < 0.5) {
-        return { scanHighCm1: 16992.2, scanLowCm1: 11257.7 };
+        return {
+          scanHighCm1: Number(
+            (16992.2 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+          scanLowCm1: Number(
+            (11257.7 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+        };
       }
       if (gratingLinesPerMm === 600 && Math.abs(absLowCm1 - 11802.8) < 0.5) {
-        return { scanHighCm1: 17800.0, scanLowCm1: 10821.0 };
+        return {
+          scanHighCm1: Number(
+            (17800.0 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+          scanLowCm1: Number(
+            (10821.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+          ),
+        };
       }
     }
 
@@ -876,7 +1081,14 @@ export function calculateScanRangeBounds(
       Math.abs(absHighCm1 - 12689) < 0.5 &&
       Math.abs(absLowCm1 - 9239) < 0.5
     ) {
-      return { scanHighCm1: 13100.0, scanLowCm1: 8700.0 };
+      return {
+        scanHighCm1: Number(
+          (13100.0 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+        scanLowCm1: Number(
+          (8700.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+      };
     }
 
     if (
@@ -887,7 +1099,14 @@ export function calculateScanRangeBounds(
       Math.abs(absHighCm1 - 18747) < 0.5 &&
       Math.abs(absLowCm1 - 14797) < 0.5
     ) {
-      return { scanHighCm1: 20450.0, scanLowCm1: 13880.0 };
+      return {
+        scanHighCm1: Number(
+          (20450.0 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+        scanLowCm1: Number(
+          (13880.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+      };
     }
   }
 
@@ -900,7 +1119,8 @@ export function calculateScanRangeBounds(
     spectrograph,
     activeXMinPx,
     activeXMaxPx,
-    zeroOrderCentrePx
+    zeroOrderCentrePx,
+    roomTemperatureC
   );
   const boundsHigh = calculateCcdWindowBoundsCm1(
     absHighCm1,
@@ -909,12 +1129,19 @@ export function calculateScanRangeBounds(
     spectrograph,
     activeXMinPx,
     activeXMaxPx,
-    zeroOrderCentrePx
+    zeroOrderCentrePx,
+    roomTemperatureC
   );
 
   // The turret scan range extends by the CCD view half-window below absLowCm1 and above absHighCm1
-  const lowerMargin = Math.max(200, (absLowCm1 - boundsLow.windowLowAbsCm1) * 1.04);
-  const upperMargin = Math.max(200, (boundsHigh.windowHighAbsCm1 - absHighCm1) * 1.04);
+  const lowerMargin = Math.max(
+    200,
+    (absLowCm1 - boundsLow.windowLowAbsCm1) * 1.04
+  );
+  const upperMargin = Math.max(
+    200,
+    (boundsHigh.windowHighAbsCm1 - absHighCm1) * 1.04
+  );
 
   return {
     scanHighCm1: Number((absHighCm1 + upperMargin).toFixed(1)),
@@ -1164,6 +1391,27 @@ export function solveCalibration(
   }
 
   const absCentreCm1 = Number(((absHighCm1 + absLowCm1) / 2).toFixed(2));
+  const roomTemperatureC =
+    typeof params.roomTemperatureC === 'number' &&
+    !Number.isNaN(params.roomTemperatureC)
+      ? params.roomTemperatureC
+      : REFERENCE_ROOM_TEMP_CELSIUS;
+
+  const thermalOptics = calculateThermalOpticsState(
+    absCentreCm1,
+    params.gratingLinesPerMm,
+    params.spectrograph,
+    roomTemperatureC
+  );
+
+  if (Math.abs(thermalOptics.deltaTempFromRefC) >= 0.05) {
+    const sign = thermalOptics.deltaTempFromRefC > 0 ? '+' : '';
+    const driftSign = thermalOptics.thermalWavenumberDriftCm1 > 0 ? '+' : '';
+    const pxSign = thermalOptics.thermalPixelDriftPx > 0 ? '+' : '';
+    limitingFactors.push(
+      `Room Temp ${roomTemperatureC.toFixed(1)} °C (ΔT = ${sign}${thermalOptics.deltaTempFromRefC.toFixed(1)} °C vs 20 °C ref · n_air = ${thermalOptics.airRefractiveIndex.toFixed(6)} · Thermal shift = ${driftSign}${thermalOptics.thermalWavenumberDriftCm1.toFixed(2)} cm⁻¹ / ${pxSign}${thermalOptics.thermalPixelDriftPx.toFixed(2)} px)`
+    );
+  }
 
   // 5. Calculate Grating Scan Range Bounds (cm^-1)
   const { scanHighCm1, scanLowCm1 } = calculateScanRangeBounds(
@@ -1176,7 +1424,8 @@ export function solveCalibration(
     isManualAbsRange,
     params.ccdActiveXMinPx,
     params.ccdActiveXMaxPx,
-    params.ccdZeroOrderCentrePx
+    params.ccdZeroOrderCentrePx,
+    roomTemperatureC
   );
   const scanSpanCm1 = Number((scanHighCm1 - scanLowCm1).toFixed(1));
 
@@ -1188,7 +1437,8 @@ export function solveCalibration(
     params.spectrograph,
     params.ccdActiveXMinPx,
     params.ccdActiveXMaxPx,
-    params.ccdZeroOrderCentrePx
+    params.ccdZeroOrderCentrePx,
+    roomTemperatureC
   );
   const ccdWindowCentreCm1 = calculateCcdWindowWidthCm1(
     absCentreCm1,
@@ -1197,7 +1447,8 @@ export function solveCalibration(
     params.spectrograph,
     params.ccdActiveXMinPx,
     params.ccdActiveXMaxPx,
-    params.ccdZeroOrderCentrePx
+    params.ccdZeroOrderCentrePx,
+    roomTemperatureC
   );
   const ccdWindowLowCm1 = calculateCcdWindowWidthCm1(
     absLowCm1,
@@ -1206,7 +1457,8 @@ export function solveCalibration(
     params.spectrograph,
     params.ccdActiveXMinPx,
     params.ccdActiveXMaxPx,
-    params.ccdZeroOrderCentrePx
+    params.ccdZeroOrderCentrePx,
+    roomTemperatureC
   );
   const dispersionCm1PerPixelCentre = Number(
     (ccdWindowCentreCm1 / params.ccdActiveWidthPx).toFixed(3)
@@ -1574,5 +1826,6 @@ export function solveCalibration(
     binDistribution,
     dispersionUniformityScore,
     confusionRisks,
+    thermalOptics,
   };
 }

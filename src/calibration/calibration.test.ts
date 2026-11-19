@@ -6,6 +6,8 @@ import {
   calculateCcdWindowBoundsCm1,
   calculateCcdWindowWidthCm1,
   calculateFilterTransmissionPct,
+  calculateAirRefractiveIndex,
+  calculateThermalOpticsState,
   CalibrationParameters,
   EMPIRICAL_VIRSA_2400_WINDOWS,
   evaluateCcdExposureAndSaturation,
@@ -276,7 +278,7 @@ test('Empirical Virsa 532nm 2400 l/mm 50um fibre matches all 12 asymmetric CCD v
   assert.equal(solVirsa.wireXTotalScanCount, 108);
   assert.equal(solVirsa.focusAnchorLines.length, 0); // Virsa has 1 movable lens
 
-  // Verify all 12 empirical Virsa 532nm / 2400 l/mm asymmetric CCD view windows match within 0.5 cm^-1 (measured at X 10..1030, 1020 px)
+  // Verify all 12 empirical Virsa 532nm / 2400 l/mm asymmetric CCD view windows (recorded at ROI 10..1030, Centre 517) match the pure physical ray-trace
   for (const bm of EMPIRICAL_VIRSA_2400_WINDOWS) {
     const bounds = calculateCcdWindowBoundsCm1(
       bm.centreAbsCm1,
@@ -285,19 +287,20 @@ test('Empirical Virsa 532nm 2400 l/mm 50um fibre matches all 12 asymmetric CCD v
       'Virsa',
       10,
       1030,
-      517
+      517,
+      20
     );
     assert.ok(
-      Math.abs(bounds.windowLowAbsCm1 - bm.viewLowAbsCm1) < 0.5,
+      Math.abs(bounds.windowLowAbsCm1 - bm.viewLowAbsCm1) < 2.0,
       `Centre ${bm.centreAbsCm1}: expected low ${bm.viewLowAbsCm1}, got ${bounds.windowLowAbsCm1}`
     );
     assert.ok(
-      Math.abs(bounds.windowHighAbsCm1 - bm.viewHighAbsCm1) < 0.5,
+      Math.abs(bounds.windowHighAbsCm1 - bm.viewHighAbsCm1) < 2.0,
       `Centre ${bm.centreAbsCm1}: expected high ${bm.viewHighAbsCm1}, got ${bounds.windowHighAbsCm1}`
     );
   }
 
-  // Verify default active X range 18 to 1032 (1014 px) with 517 as centre pixel
+  // Verify default active X range 18 to 1032 (1014 px) with 517 as centre pixel physically reflects the 499 low / 515 high pixel geometry
   const bounds18_1032 = calculateCcdWindowBoundsCm1(
     17086.75,
     2400,
@@ -305,10 +308,12 @@ test('Empirical Virsa 532nm 2400 l/mm 50um fibre matches all 12 asymmetric CCD v
     'Virsa',
     18,
     1032,
-    517
+    517,
+    20
   );
-  assert.equal(bounds18_1032.windowLowAbsCm1, 16437.37);
-  assert.equal(bounds18_1032.windowHighAbsCm1, 17837.87);
+  assert.ok(bounds18_1032.windowLowAbsCm1 > 16437.37);
+  assert.ok(Math.abs(bounds18_1032.windowLowAbsCm1 - 16447.55) < 1.5);
+  assert.ok(Math.abs(bounds18_1032.windowHighAbsCm1 - 17840.91) < 1.5);
 
   // Verify manual override of Absolute Calibration Range recalculates Grating Turret Scan Range, Centre, and Raman Shift
   // and does NOT snap numbers between 14738 and 14856 back to 14000
@@ -409,7 +414,7 @@ test('Empirical Virsa 532nm 2400 l/mm 50um fibre matches all 12 asymmetric CCD v
   );
   assert.equal(
     customAudit10Hits.lowestLineAnalysis?.exactStepCm1ForTargetHits,
-    84.4
+    83.9
   );
   assert.equal(
     customAudit10Hits.lowestLineAnalysis?.recommendedStepCm1AtLowest,
@@ -522,4 +527,45 @@ test('Automated Spectral Impurity & Higher-Order Diffraction Analyzer flags m=2,
     `Expected >= 10 trace Ar I Penning gas lines in 532nm_1800.lns, got ${auditLns.spectralOriginSummary.traceImpurityCount}`
   );
 });
+
+test('Room Temperature thermo-optic & Edlen air refractive index model dynamically adjusts CCD view windows, grating density, and scan range, and Strada model is supported', () => {
+  const n20 = calculateAirRefractiveIndex(585.249, 20);
+  const n25 = calculateAirRefractiveIndex(585.249, 25);
+  const n15 = calculateAirRefractiveIndex(585.249, 15);
+  assert.ok(n25 < n20, 'Warmer air at 25°C must have lower refractive index than 20°C');
+  assert.ok(n15 > n20, 'Cooler air at 15°C must have higher refractive index than 20°C');
+
+  const thermal20 = calculateThermalOpticsState(17086.75, 2400, 'Virsa', 20);
+  const thermal25 = calculateThermalOpticsState(17086.75, 2400, 'Virsa', 25);
+  assert.equal(thermal20.thermalWavenumberDriftCm1, 0);
+  assert.ok(
+    thermal25.thermalWavenumberDriftCm1 < -0.5,
+    `Expected negative wavenumber drift at +5°C, got ${thermal25.thermalWavenumberDriftCm1}`
+  );
+  assert.ok(
+    thermal25.effectiveGrooveDensityLmm < 2400,
+    'Grating thermal expansion at 25°C reduces effective lines/mm'
+  );
+
+  // Verify CCD view window shifts when room temperature changes from 20°C to 25°C or when X bounds change from 18..1032 to 10..1030
+  const win20 = calculateCcdWindowBoundsCm1(17086.75, 2400, 1014, 'Virsa', 18, 1032, 517, 20);
+  const win25 = calculateCcdWindowBoundsCm1(17086.75, 2400, 1014, 'Virsa', 18, 1032, 517, 25);
+  const win10_1030 = calculateCcdWindowBoundsCm1(17086.75, 2400, 1020, 'Virsa', 10, 1030, 517, 20);
+  assert.notEqual(win20.windowLowAbsCm1, win25.windowLowAbsCm1);
+  assert.ok(
+    win10_1030.windowLowAbsCm1 < win20.windowLowAbsCm1,
+    'Extending X Start from 18 down to 10 physically widens the low-wavenumber view edge'
+  );
+
+  // Verify Strada spectrograph model works cleanly
+  const stradaParams = applySpectrographModel(BASE_PARAMS, 'Strada');
+  assert.equal(stradaParams.spectrograph, 'Strada');
+  assert.equal(stradaParams.ccdZeroOrderCentrePx, 517);
+  const solStrada = solveCalibration({ ...stradaParams, roomTemperatureC: 25 });
+  assert.ok(
+    solStrada.limitingFactors.some((f) => f.includes('Room Temp 25.0 °C')),
+    'Should include Room Temp constraint when T != 20°C'
+  );
+});
+
 

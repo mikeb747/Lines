@@ -52,9 +52,6 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
     scanHighCm1,
     scanLowCm1,
     absCentreCm1,
-    wavenumberShiftPerStepCm1,
-    recommendedMotorStepTicks,
-    totalScanSteps,
     wireXStepAbsCm1,
     wireXTotalScanCount,
     primaryCalibrationLine,
@@ -62,15 +59,18 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
   } = solution;
 
   const isVirsa = params.spectrograph === 'Virsa';
+  const activeStepCm1 = Math.max(1, wireXStepAbsCm1);
+  const activeTotalScans = Math.max(1, wireXTotalScanCount);
+  const roomTempC = params.roomTemperatureC ?? VIRSA_ROOM_TEMP_CELSIUS;
 
   // Step 0 starts at scanLowCm1 (left side of scan bar) and steps up to scanHighCm1 (right side)
   const defaultStepIdx = Math.max(
     0,
     Math.min(
-      totalScanSteps,
+      activeTotalScans,
       Math.round(
         ((primaryCalibrationLine?.wavenumber ?? absCentreCm1) - scanLowCm1) /
-          Math.max(1, wavenumberShiftPerStepCm1)
+          activeStepCm1
       )
     )
   );
@@ -91,25 +91,25 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
     const timer = window.setInterval(() => {
       setCustomCentreNuCm1(null);
       setStepIndex((prev) => {
-        if (prev >= totalScanSteps) {
+        if (prev >= activeTotalScans) {
           setIsPlayingScan(false);
-          return totalScanSteps;
+          return activeTotalScans;
         }
         return prev + 1;
       });
     }, 180);
     return () => window.clearInterval(timer);
-  }, [isPlayingScan, totalScanSteps]);
+  }, [isPlayingScan, activeTotalScans]);
 
   const showVirsaEmpiricalTable =
     empiricalTableMode === 'virsa2400' ||
     (empiricalTableMode === 'auto' && isVirsa);
 
-  const clampedStep = Math.max(0, Math.min(totalScanSteps, stepIndex));
+  const clampedStep = Math.max(0, Math.min(activeTotalScans, stepIndex));
   const stepDerivedCentreNuCm1 = Number(
     Math.min(
       scanHighCm1,
-      scanLowCm1 + clampedStep * wavenumberShiftPerStepCm1
+      scanLowCm1 + clampedStep * activeStepCm1
     ).toFixed(2)
   );
   const currentCentreNuCm1 =
@@ -132,7 +132,8 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
     params.spectrograph,
     leftMarginPx,
     rightActiveLimitPx,
-    centrePixelCol
+    centrePixelCol,
+    roomTempC
   );
 
   const currentWindowWidthCm1 = kinematics.ccdWindowWidthCm1;
@@ -197,30 +198,32 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
   }[] = [];
 
   if (trackedLine) {
-    for (let s = 0; s <= totalScanSteps; s++) {
+    for (let s = 0; s <= activeTotalScans; s++) {
       const centreNu = Math.min(
         scanHighCm1,
-        scanLowCm1 + s * wavenumberShiftPerStepCm1
+        scanLowCm1 + s * activeStepCm1
       );
-      const bounds = calculateCcdWindowBoundsCm1(
+      const stepKinematics = calculateTurretKinematicsAtWavenumber(
         centreNu,
         params.gratingLinesPerMm,
+        laserWavenumberCm1,
         effectiveActiveWidthPx,
         params.spectrograph,
         leftMarginPx,
         rightActiveLimitPx,
-        centrePixelCol
+        centrePixelCol,
+        roomTempC
       );
       let pxCol: number;
       if (trackedLine.wavenumber <= centreNu) {
-        const lowSpan = Math.max(0.1, centreNu - bounds.windowLowAbsCm1);
+        const lowSpan = Math.max(0.1, centreNu - stepKinematics.windowLowAbsCm1);
         const fracFromLow =
-          (trackedLine.wavenumber - bounds.windowLowAbsCm1) / lowSpan;
+          (trackedLine.wavenumber - stepKinematics.windowLowAbsCm1) / lowSpan;
         pxCol = Math.round(
           leftMarginPx + fracFromLow * (centrePixelCol - leftMarginPx)
         );
       } else {
-        const highSpan = Math.max(0.1, bounds.windowHighAbsCm1 - centreNu);
+        const highSpan = Math.max(0.1, stepKinematics.windowHighAbsCm1 - centreNu);
         const fracFromCentre = (trackedLine.wavenumber - centreNu) / highSpan;
         pxCol = Math.round(
           centrePixelCol +
@@ -230,7 +233,7 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
       if (pxCol >= leftMarginPx && pxCol <= rightActiveLimitPx) {
         trackedOccurrences.push({
           stepIdx: s,
-          motorTicks: s * recommendedMotorStepTicks,
+          motorTicks: stepKinematics.absoluteMotorSteps,
           turretCentreCm1: Number(centreNu.toFixed(1)),
           pixelCol: pxCol,
         });
@@ -241,9 +244,9 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
   const jumpToWavenumber = (targetNuCm1: number) => {
     setIsPlayingScan(false);
     const nearestStep = Math.round(
-      (targetNuCm1 - scanLowCm1) / Math.max(1, wavenumberShiftPerStepCm1)
+      (targetNuCm1 - scanLowCm1) / activeStepCm1
     );
-    if (nearestStep >= 0 && nearestStep <= totalScanSteps) {
+    if (nearestStep >= 0 && nearestStep <= activeTotalScans) {
       setStepIndex(nearestStep);
     }
     setCustomCentreNuCm1(Number(targetNuCm1.toFixed(2)));
@@ -275,7 +278,7 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
                   [{params.ccdActiveHeightPx} rows, 50µm fibre] · Pitch{' '}
                   <strong>{VIRSA_PIXEL_PITCH_MM} mm</strong> · Cooled{' '}
                   <strong>{VIRSA_CCD_TEMP_CELSIUS} °C</strong> in{' '}
-                  <strong>{VIRSA_ROOM_TEMP_CELSIUS} °C</strong> Air ·{' '}
+                  <strong>{roomTempC.toFixed(1)} °C</strong> Air ·{' '}
                   <strong>{VIRSA_MOTOR_STEPS_PER_DEGREE} steps/deg</strong>)
                 </>
               ) : (
@@ -287,7 +290,8 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
                   </strong>{' '}
                   [{effectiveActiveWidthPx} px, Centre{' '}
                   <strong>Pixel {centrePixelCol}</strong>] × bottom{' '}
-                  {params.ccdActiveHeightPx} rows) · Turret scale:{' '}
+                  {params.ccdActiveHeightPx} rows) ·{' '}
+                  <strong>{roomTempC.toFixed(1)} °C</strong> Air · Turret scale:{' '}
                   <strong>{MOTOR_STEPS_PER_DEGREE} steps/deg</strong> (100 steps
                   = 0.07599°)
                 </>
@@ -303,7 +307,7 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
                   setIsPlayingScan(false);
                 } else {
                   setCustomCentreNuCm1(null);
-                  if (clampedStep >= totalScanSteps) {
+                  if (clampedStep >= activeTotalScans) {
                     setStepIndex(0);
                   }
                   setIsPlayingScan(true);
@@ -337,7 +341,7 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
               className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Prev Step (-{recommendedMotorStepTicks} cm⁻¹)
+              Prev Step (-{wireXStepAbsCm1} cm⁻¹)
             </button>
             <button
               type="button"
@@ -357,11 +361,11 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
               onClick={() => {
                 setIsPlayingScan(false);
                 setCustomCentreNuCm1(null);
-                setStepIndex(Math.min(totalScanSteps, clampedStep + 1));
+                setStepIndex(Math.min(activeTotalScans, clampedStep + 1));
               }}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap"
             >
-              Next Step (+{recommendedMotorStepTicks} cm⁻¹)
+              Next Step (+{wireXStepAbsCm1} cm⁻¹)
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -548,7 +552,7 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
             type="range"
             aria-label="Grating turret scan step index"
             min={0}
-            max={totalScanSteps}
+            max={activeTotalScans}
             value={clampedStep}
             onChange={(e) => {
               setCustomCentreNuCm1(null);
@@ -824,7 +828,8 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
                       'Virsa',
                       leftMarginPx,
                       rightActiveLimitPx,
-                      centrePixelCol
+                      centrePixelCol,
+                      roomTempC
                     );
                     const lowDelta =
                       win.centreAbsCm1 - liveBounds.windowLowAbsCm1;
@@ -1101,9 +1106,10 @@ export const CcdSimulatorView: React.FC<CcdSimulatorViewProps> = ({
               {trackedLine?.wavenumber.toFixed(2)} cm⁻¹)
             </h3>
             <p className="text-xs text-slate-500">
-              As the grating rotates in{' '}
-              <strong>{recommendedMotorStepTicks}-step increments</strong>, this
-              Neon peak strikes the {params.ccdActiveWidthPx} px active CCD at{' '}
+              As the grating steps in{' '}
+              <strong>{wireXStepAbsCm1} Abs cm⁻¹ increments</strong> ({activeTotalScans}{' '}
+              scans), this Neon peak strikes the {params.ccdActiveWidthPx} px
+              active CCD at{' '}
               <strong>{trackedOccurrences.length} distinct positions</strong>{' '}
               through the spectrograph lenses
             </p>

@@ -19,7 +19,7 @@ export default defineConfig(() => {
           name: 'SpectroCal — Spectrograph Neon Calibration & File Checker',
           short_name: 'SpectroCal',
           description:
-            'Optical spectrograph calibration workbench and automated file verifier for Virsa, inVia, and Strava Raman systems using Neon emission lines.',
+            'Optical spectrograph calibration workbench and automated file verifier for Virsa, inVia, and Strada Raman systems using Neon emission lines.',
           theme_color: '#0f172a',
           background_color: '#f8fafc',
           display: 'standalone',

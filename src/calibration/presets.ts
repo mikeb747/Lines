@@ -35,6 +35,7 @@ const DEFAULT_BASE_PARAMS: Omit<
   manualPclOverrideCm1: null,
   customAbsLowCm1: null,
   customAbsHighCm1: null,
+  roomTemperatureC: 20,
 };
 
 function makePresetFile(params: CalibrationParameters): string {
