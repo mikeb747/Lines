@@ -19,6 +19,7 @@ import {
   PWAInstallModal,
   usePWAInstall,
 } from './components/PWAInstallButton';
+import { DeferredNumberInput } from './components/DeferredNumberInput';
 
 type WorkspaceTab = 'checker' | 'picker' | 'simulator' | 'matrix';
 
@@ -140,9 +141,14 @@ export default function App() {
             e.preventDefault();
             setActiveTab('checker');
           }}
-          className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0"
         >
-          SpectroCal
+          <img
+            src={`${import.meta.env.BASE_URL}assets/aistudio/icon_a27d7601.png`}
+            alt="SpectroCal Icon"
+            className="h-8 w-8 rounded-lg object-contain shrink-0"
+          />
+          <span>SpectroCal</span>
         </a>
 
         <nav
@@ -299,44 +305,40 @@ export default function App() {
 
               {activeTab === 'checker' ? (
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    step={1}
-                    aria-label="Absolute Calibration Range Start (cm-1)"
+                  <DeferredNumberInput
+                    ariaLabel="Absolute Calibration Range Start (cm-1)"
+                    integer
+                    min={1000}
+                    max={40000}
                     value={Math.round(solution.absLowCm1)}
-                    onChange={(e) => {
-                      const nextLow = Number(e.target.value);
-                      if (!Number.isNaN(nextLow)) {
-                        handleChangeParams({
-                          ...params,
-                          customAbsLowCm1: Math.round(nextLow),
-                          customAbsHighCm1: Math.round(
-                            params.customAbsHighCm1 ?? solution.absHighCm1
-                          ),
-                        });
-                      }
+                    onCommit={(nextLow) => {
+                      handleChangeParams({
+                        ...params,
+                        customAbsLowCm1: Math.round(nextLow),
+                        customAbsHighCm1: Math.round(
+                          params.customAbsHighCm1 ?? solution.absHighCm1
+                        ),
+                      });
                     }}
                     className="w-20 rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono text-sm font-bold text-slate-900 tabular-nums focus:border-cyan-600 focus:bg-white focus:outline-none"
                   />
                   <span className="font-mono text-sm font-bold text-slate-400">
                     –
                   </span>
-                  <input
-                    type="number"
-                    step={1}
-                    aria-label="Absolute Calibration Range End (cm-1)"
+                  <DeferredNumberInput
+                    ariaLabel="Absolute Calibration Range End (cm-1)"
+                    integer
+                    min={1000}
+                    max={45000}
                     value={Math.round(solution.absHighCm1)}
-                    onChange={(e) => {
-                      const nextHigh = Number(e.target.value);
-                      if (!Number.isNaN(nextHigh)) {
-                        handleChangeParams({
-                          ...params,
-                          customAbsLowCm1: Math.round(
-                            params.customAbsLowCm1 ?? solution.absLowCm1
-                          ),
-                          customAbsHighCm1: Math.round(nextHigh),
-                        });
-                      }
+                    onCommit={(nextHigh) => {
+                      handleChangeParams({
+                        ...params,
+                        customAbsLowCm1: Math.round(
+                          params.customAbsLowCm1 ?? solution.absLowCm1
+                        ),
+                        customAbsHighCm1: Math.round(nextHigh),
+                      });
                     }}
                     className="w-20 rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono text-sm font-bold text-slate-900 tabular-nums focus:border-cyan-600 focus:bg-white focus:outline-none"
                   />

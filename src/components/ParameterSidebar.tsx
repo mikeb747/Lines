@@ -9,6 +9,7 @@ import {
 } from '../calibration/physicsEngine';
 import { FACTORY_PRESETS, FactoryPreset } from '../calibration/presets';
 import { Sliders, RotateCcw } from 'lucide-react';
+import { DeferredNumberInput } from './DeferredNumberInput';
 
 interface ParameterSidebarProps {
   params: CalibrationParameters;
@@ -29,29 +30,6 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   onSelectPreset,
   onResetDefaults,
 }) => {
-  const [laserInputText, setLaserInputText] = React.useState<string>(
-    String(params.laserNm)
-  );
-  const [minIntensityInputText, setMinIntensityInputText] =
-    React.useState<string>(String(params.minRelativeIntensity));
-
-  React.useEffect(() => {
-    const parsedCurrent = parseFloat(laserInputText);
-    if (isNaN(parsedCurrent) || Math.abs(parsedCurrent - params.laserNm) > 1e-6) {
-      setLaserInputText(String(params.laserNm));
-    }
-  }, [params.laserNm]);
-
-  React.useEffect(() => {
-    const parsedCurrent = parseFloat(minIntensityInputText);
-    if (
-      isNaN(parsedCurrent) ||
-      Math.abs(parsedCurrent - params.minRelativeIntensity) > 1e-6
-    ) {
-      setMinIntensityInputText(String(params.minRelativeIntensity));
-    }
-  }, [params.minRelativeIntensity]);
-
   const update = <K extends keyof CalibrationParameters>(
     key: K,
     value: CalibrationParameters[K]
@@ -153,10 +131,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               <button
                 key={nm}
                 type="button"
-                onClick={() => {
-                  setLaserInputText(String(nm));
-                  update('laserNm', nm);
-                }}
+                onClick={() => update('laserNm', nm)}
                 className={`rounded-md border py-1 text-xs font-mono font-medium transition-colors whitespace-nowrap ${
                   Math.abs(params.laserNm - nm) < 0.5
                     ? 'border-cyan-600 bg-cyan-50 text-cyan-900'
@@ -167,26 +142,13 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               </button>
             ))}
           </div>
-          <input
+          <DeferredNumberInput
             id="laser-nm-input"
-            type="text"
-            inputMode="decimal"
+            min={200}
+            max={2000}
             placeholder="Enter any laser wavelength (nm)..."
-            value={laserInputText}
-            onChange={(e) => {
-              const raw = e.target.value;
-              setLaserInputText(raw);
-              const val = parseFloat(raw);
-              if (!isNaN(val) && val > 0) {
-                update('laserNm', val);
-              }
-            }}
-            onBlur={() => {
-              const val = parseFloat(laserInputText);
-              if (isNaN(val) || val <= 0) {
-                setLaserInputText(String(params.laserNm));
-              }
-            }}
+            value={params.laserNm}
+            onCommit={(val) => update('laserNm', val)}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-900 tabular-nums focus:border-cyan-600 focus:outline-none"
           />
         </div>
@@ -255,17 +217,13 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               >
                 Min Shift (cm⁻¹)
               </label>
-              <input
+              <DeferredNumberInput
                 id="custom-raman-min"
-                type="number"
                 min={0}
                 max={4000}
-                step={10}
                 value={params.customRamanMinCm1}
-                onChange={(e) =>
-                  update('customRamanMinCm1', Number(e.target.value) || 0)
-                }
-                className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
+                onCommit={(val) => update('customRamanMinCm1', val)}
+                className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
               />
             </div>
             <div>
@@ -275,17 +233,13 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               >
                 Max Shift (cm⁻¹)
               </label>
-              <input
+              <DeferredNumberInput
                 id="custom-raman-max"
-                type="number"
                 min={500}
                 max={10000}
-                step={50}
                 value={params.customRamanMaxCm1}
-                onChange={(e) =>
-                  update('customRamanMaxCm1', Number(e.target.value) || 4000)
-                }
-                className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
+                onCommit={(val) => update('customRamanMaxCm1', val)}
+                className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
               />
             </div>
           </div>
@@ -340,19 +294,14 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             >
               Target Cal Lines
             </label>
-            <input
+            <DeferredNumberInput
               id="target-line-count-input"
-              type="number"
+              integer
               min={5}
               max={16}
               value={params.targetLineCount}
-              onChange={(e) =>
-                update(
-                  'targetLineCount',
-                  Math.max(5, Math.min(16, parseInt(e.target.value, 10) || 9))
-                )
-              }
-              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
+              onCommit={(val) => update('targetLineCount', val)}
+              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
             />
           </div>
           <div>
@@ -362,25 +311,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             >
               Min Ne Intensity
             </label>
-            <input
+            <DeferredNumberInput
               id="min-intensity-input"
-              type="text"
-              inputMode="decimal"
-              value={minIntensityInputText}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setMinIntensityInputText(raw);
-                const val = parseFloat(raw);
-                if (!isNaN(val)) {
-                  update('minRelativeIntensity', val);
-                }
-              }}
-              onBlur={() => {
-                const val = parseFloat(minIntensityInputText);
-                if (isNaN(val)) {
-                  setMinIntensityInputText(String(params.minRelativeIntensity));
-                }
-              }}
+              value={params.minRelativeIntensity}
+              onCommit={(val) => update('minRelativeIntensity', val)}
               className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
             />
           </div>
@@ -432,17 +366,13 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               >
                 X Start (px)
               </label>
-              <input
+              <DeferredNumberInput
                 id="ccd-x-min"
-                type="number"
+                integer
                 min={0}
                 max={500}
                 value={params.ccdActiveXMinPx ?? 18}
-                onChange={(e) => {
-                  const nextMin = Math.max(
-                    0,
-                    Math.min(500, parseInt(e.target.value, 10) || 0)
-                  );
+                onCommit={(nextMin) => {
                   const currentMax = params.ccdActiveXMaxPx ?? 1032;
                   const nextWidth = Math.max(100, currentMax - nextMin);
                   onChangeParams({
@@ -452,7 +382,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     ccdActiveWidthPx: nextWidth,
                   });
                 }}
-                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
               />
             </div>
 
@@ -463,20 +393,13 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               >
                 X End (px)
               </label>
-              <input
+              <DeferredNumberInput
                 id="ccd-x-max"
-                type="number"
+                integer
                 min={540}
                 max={params.ccdTotalWidthPx}
                 value={params.ccdActiveXMaxPx ?? 1032}
-                onChange={(e) => {
-                  const nextMax = Math.max(
-                    540,
-                    Math.min(
-                      params.ccdTotalWidthPx,
-                      parseInt(e.target.value, 10) || 1032
-                    )
-                  );
+                onCommit={(nextMax) => {
                   const currentMin = params.ccdActiveXMinPx ?? 18;
                   const nextWidth = Math.max(100, nextMax - currentMin);
                   onChangeParams({
@@ -486,7 +409,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     ccdActiveWidthPx: nextWidth,
                   });
                 }}
-                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
               />
             </div>
 
@@ -497,23 +420,19 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
               >
                 Centre (px)
               </label>
-              <input
+              <DeferredNumberInput
                 id="ccd-x-centre"
-                type="number"
+                integer
                 min={400}
                 max={640}
                 value={params.ccdZeroOrderCentrePx ?? 517}
-                onChange={(e) => {
-                  const nextCentre = Math.max(
-                    400,
-                    Math.min(640, parseInt(e.target.value, 10) || 517)
-                  );
+                onCommit={(nextCentre) => {
                   onChangeParams({
                     ...params,
                     ccdZeroOrderCentrePx: nextCentre,
                   });
                 }}
-                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
               />
             </div>
           </div>
@@ -527,17 +446,13 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
             >
               Active Width (of {params.ccdTotalWidthPx} px)
             </label>
-            <input
+            <DeferredNumberInput
               id="ccd-active-width"
-              type="number"
+              integer
               min={512}
               max={1040}
               value={params.ccdActiveWidthPx}
-              onChange={(e) => {
-                const nextWidth = Math.max(
-                  512,
-                  Math.min(1040, parseInt(e.target.value, 10) || 1014)
-                );
+              onCommit={(nextWidth) => {
                 const nextMin = Math.round(
                   (params.ccdTotalWidthPx - nextWidth) / 2
                 );
@@ -549,7 +464,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                   ccdActiveXMaxPx: nextMax,
                 });
               }}
-              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
+              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
             />
           </div>
           <div>
@@ -561,19 +476,14 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                 ? 'Active Y Rows (125–145)'
                 : `Bottom Rows (of ${params.ccdTotalHeightPx} px)`}
             </label>
-            <input
+            <DeferredNumberInput
               id="ccd-active-height"
-              type="number"
+              integer
               min={10}
               max={256}
               value={params.ccdActiveHeightPx}
-              onChange={(e) =>
-                update(
-                  'ccdActiveHeightPx',
-                  Math.max(10, Math.min(256, parseInt(e.target.value, 10) || 30))
-                )
-              }
-              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums"
+              onCommit={(val) => update('ccdActiveHeightPx', val)}
+              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs tabular-nums focus:border-cyan-600 focus:outline-none"
             />
           </div>
         </div>

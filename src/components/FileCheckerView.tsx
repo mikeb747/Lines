@@ -7,6 +7,7 @@ import {
   CalibrationParameters,
 } from '../calibration/physicsEngine';
 import { SpectralDispersionChart } from './SpectralDispersionChart';
+import { DeferredNumberInput } from './DeferredNumberInput';
 import {
   Upload,
   Wand2,
@@ -286,21 +287,20 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Start (Lower Abs cm⁻¹)
               </label>
-              <input
-                type="number"
-                step={1}
+              <DeferredNumberInput
+                integer
+                min={1000}
+                max={40000}
+                ariaLabel="Start (Lower Abs cm-1)"
                 value={Math.round(solution.absLowCm1)}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  if (!Number.isNaN(val)) {
-                    onChangeParams({
-                      ...params,
-                      customAbsLowCm1: Math.round(val),
-                      customAbsHighCm1: Math.round(
-                        params.customAbsHighCm1 ?? solution.absHighCm1
-                      ),
-                    });
-                  }
+                onCommit={(val) => {
+                  onChangeParams({
+                    ...params,
+                    customAbsLowCm1: Math.round(val),
+                    customAbsHighCm1: Math.round(
+                      params.customAbsHighCm1 ?? solution.absHighCm1
+                    ),
+                  });
                 }}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-mono font-bold text-slate-900 focus:border-cyan-600 focus:outline-none tabular-nums"
               />
@@ -310,21 +310,20 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 End (Higher Abs cm⁻¹)
               </label>
-              <input
-                type="number"
-                step={1}
+              <DeferredNumberInput
+                integer
+                min={1000}
+                max={45000}
+                ariaLabel="End (Higher Abs cm-1)"
                 value={Math.round(solution.absHighCm1)}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  if (!Number.isNaN(val)) {
-                    onChangeParams({
-                      ...params,
-                      customAbsLowCm1: Math.round(
-                        params.customAbsLowCm1 ?? solution.absLowCm1
-                      ),
-                      customAbsHighCm1: Math.round(val),
-                    });
-                  }
+                onCommit={(val) => {
+                  onChangeParams({
+                    ...params,
+                    customAbsLowCm1: Math.round(
+                      params.customAbsLowCm1 ?? solution.absLowCm1
+                    ),
+                    customAbsHighCm1: Math.round(val),
+                  });
                 }}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-mono font-bold text-slate-900 focus:border-cyan-600 focus:outline-none tabular-nums"
               />
@@ -418,19 +417,16 @@ export const FileCheckerView: React.FC<FileCheckerViewProps> = ({
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Required Target Hits / Line
                   </label>
-                  <input
-                    type="number"
+                  <DeferredNumberInput
+                    integer
                     min={1}
                     max={40}
-                    step={1}
+                    ariaLabel="Required Target Hits / Line"
                     value={params.targetOccurrencesPerLine}
-                    onChange={(e) =>
+                    onCommit={(val) =>
                       onChangeParams({
                         ...params,
-                        targetOccurrencesPerLine: Math.max(
-                          1,
-                          Math.min(40, Number(e.target.value) || 8)
-                        ),
+                        targetOccurrencesPerLine: val,
                       })
                     }
                     className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-mono font-bold text-slate-900 focus:border-cyan-600 focus:outline-none tabular-nums"
