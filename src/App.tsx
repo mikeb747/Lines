@@ -146,7 +146,7 @@ export default function App() {
           <img
             src={`${import.meta.env.BASE_URL}assets/aistudio/icon_a27d7601.png`}
             alt="SpectroCal Icon"
-            className="h-8 w-8 rounded-lg object-contain shrink-0"
+            className="w-[55px] h-[51px] pr-0 -mr-[6px] rounded-lg object-contain shrink-0"
           />
           <span>SpectroCal</span>
         </a>
