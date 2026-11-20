@@ -294,6 +294,58 @@ MotorStep: 50
 18758.99\t42.3
 `;
 
+const EMPIRICAL_VIRSA_785_1500_FILE = `# Empirical Virsa 785nm / 1500 l/mm Calibration (Virsa_785_1500.lns · 9300-13400 cm-1 · 82 Scans @ 50 cm-1 Abs Step)
+Spectrograph: Virsa
+Laser: 785nm
+Grating: 1500 l/mm
+Filter: Standard (50-4000 cm-1)
+CCD: FDA (1040x256 px, Active X: 18-1032, Active Y: 125-145, Zero-Order Centre: Pixel 517, Pitch: -0.026 mm, -70 C in 20 C Air)
+ScanRange: 13400.0 - 9300.0
+PCL: 10609.65
+MotorStep: 50
+# Fit Parameters: Zero Offset -0.010755 deg, Focal Length 200.0 -> 197.004 mm (1.08996e-5), Included Angle 37.998561 -> 37.720012 deg
+# RMS Deviation: 11.786656 -> 0.057281 cm-1 (395 peak hits across 20 lines: 12 Ne I + 8 Penning Ar I)
+# Wavenumber(cm-1)   Intensity
+12581.50\t8000
+12340.05\t11000
+12322.39\t28200
+12047.72\t300
+11936.58\t100000
+11893.14\t10400
+11771.13\t70000
+11639.74\t12000
+11581.25\t36000
+11294.50\t12000
+11211.39\t2700
+10961.35\t18000
+10930.55\t1600
+10751.71\t1000
+10722.12\t1000
+10609.65\t900
+10488.60\t1000
+10354.34\t3900
+10220.24\t150
+9551.05\t50
+`;
+
+const paramsVirsa785_1500: CalibrationParameters = {
+  ...DEFAULT_BASE_PARAMS,
+  spectrograph: 'Virsa',
+  laserNm: 785,
+  gratingLinesPerMm: 1500,
+  filterType: 'standard',
+  ccdActiveWidthPx: 1014, // Active X: 18 to 1032
+  ccdActiveXMinPx: 18,
+  ccdActiveXMaxPx: 1032,
+  ccdZeroOrderCentrePx: 517,
+  ccdActiveHeightPx: 20, // Active Y: 125 to 145
+  ccdDetectionCutoffCm1: 9500,
+  enforceCcdCutoff: true,
+  targetOccurrencesPerLine: 16,
+  targetLineCount: 16,
+  minRelativeIntensity: 1,
+};
+
 const paramsVirsa532_2400: CalibrationParameters = {
   ...DEFAULT_BASE_PARAMS,
   spectrograph: 'Virsa',
@@ -320,6 +372,16 @@ export const FACTORY_PRESETS: FactoryPreset[] = [
     params: paramsVirsa532_2400,
     sampleFileName: 'Virsa_532nm_2400_50um_calibrated.txt',
     sampleFileContent: EMPIRICAL_VIRSA_532_2400_FILE,
+  },
+  {
+    id: 'virsa-785-1500-empirical',
+    label: 'Virsa · 785 nm · 1500 l/mm — Empirical NIR Calibration (9300–13400 cm⁻¹, 50 cm⁻¹ Step, 20 Lines)',
+    shortTag: 'Virsa 785nm / 1500 (NIR Empirical)',
+    description:
+      'Virsa 785nm + 1500 l/mm empirical NIR calibration (9300–13400 cm⁻¹ @ 50 cm⁻¹ step, F = 200→197.004 mm, Included angle = 37.9986°→37.7200°, Zero offset = -0.010755°, RMS 11.7867→0.0573 cm⁻¹). Uses 20 lines (12 Ne I + 8 Penning Ar I lines extending down to 9551.05 cm⁻¹ / 1047.0 nm with 12–26 hits/line).',
+    params: paramsVirsa785_1500,
+    sampleFileName: 'Virsa_785_1500.lns',
+    sampleFileContent: EMPIRICAL_VIRSA_785_1500_FILE,
   },
   {
     id: '532-600-flawed-audit',

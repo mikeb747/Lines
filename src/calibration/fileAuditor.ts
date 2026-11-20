@@ -112,9 +112,106 @@ export function auditCalibrationFile(
   const parsedLines: ParsedLineEntry[] = [];
   let activeExposureSec: number | undefined = undefined;
 
+  // Detect WiRE X GratingCalData report format (trailing "// ..." metadata and "// Error data" table)
+  const isWireXGratingCalData =
+    /\/\/\s*Grating groove density/i.test(rawContent) &&
+    /\/\/\s*Error data/i.test(rawContent);
+
+  const wireXErrorAggregates = new Map<
+    number,
+    {
+      rawLineNumber: number;
+      wavenumberCm1: number;
+      hitCount: number;
+      minPixel: number;
+      maxPixel: number;
+      minStep: number;
+      maxStep: number;
+      sumSqError: number;
+      maxAbsError: number;
+    }
+  >();
+  let inWireXErrorDataSection = false;
+
   for (let idx = 0; idx < lines.length; idx++) {
     const raw = lines[idx].trim();
     if (!raw) continue;
+
+    if (isWireXGratingCalData) {
+      if (/^\/\/\s*Error data/i.test(raw)) {
+        inWireXErrorDataSection = true;
+        continue;
+      }
+
+      if (!inWireXErrorDataSection) {
+        // Parse WiRE X trailing "//" comment metadata lines
+        const commentIdx = raw.indexOf('//');
+        if (commentIdx !== -1) {
+          const valPart = raw.slice(0, commentIdx).trim();
+          const commentPart = raw.slice(commentIdx + 2).trim().toLowerCase();
+          const numVal = parseFloat(valPart);
+
+          if (commentPart.includes('laser name')) {
+            const lm = valPart.match(/(\d{3,4})/);
+            if (lm) detectedHeaders.laserNm = parseFloat(lm[1]);
+          } else if (
+            commentPart.includes('grating groove density') &&
+            !isNaN(numVal)
+          ) {
+            detectedHeaders.gratingLinesPerMm = Math.round(numVal);
+          } else if (commentPart.includes('wavenumber start') && !isNaN(numVal)) {
+            detectedHeaders.scanLowCm1 = numVal;
+          } else if (commentPart.includes('wavenumber end') && !isNaN(numVal)) {
+            detectedHeaders.scanHighCm1 = numVal;
+          } else if (commentPart.includes('wavenumber step') && !isNaN(numVal)) {
+            detectedHeaders.motorStepTicks = numVal;
+            detectedHeaders.spectrograph = 'Virsa';
+          }
+        }
+        continue;
+      }
+
+      // Inside "// Error data" section: skip "// Line Pixel Step Error" header
+      if (raw.startsWith('//') || /^[a-zA-Z]/.test(raw)) {
+        continue;
+      }
+
+      const cols = raw.split(/\s+/);
+      if (cols.length >= 4) {
+        const wn = parseFloat(cols[0]);
+        const px = parseFloat(cols[1]);
+        const st = parseFloat(cols[2]);
+        const err = parseFloat(cols[3]);
+        if (!isNaN(wn) && wn >= 4000 && wn <= 26000 && !isNaN(px)) {
+          const key = Number(wn.toFixed(2));
+          const existing = wireXErrorAggregates.get(key);
+          if (!existing) {
+            wireXErrorAggregates.set(key, {
+              rawLineNumber: idx + 1,
+              wavenumberCm1: key,
+              hitCount: 1,
+              minPixel: px,
+              maxPixel: px,
+              minStep: st,
+              maxStep: st,
+              sumSqError: !isNaN(err) ? err * err : 0,
+              maxAbsError: !isNaN(err) ? Math.abs(err) : 0,
+            });
+          } else {
+            existing.hitCount += 1;
+            existing.minPixel = Math.min(existing.minPixel, px);
+            existing.maxPixel = Math.max(existing.maxPixel, px);
+            existing.minStep = Math.min(existing.minStep, st);
+            existing.maxStep = Math.max(existing.maxStep, st);
+            if (!isNaN(err)) {
+              existing.sumSqError += err * err;
+              existing.maxAbsError = Math.max(existing.maxAbsError, Math.abs(err));
+            }
+          }
+        }
+      }
+      continue;
+    }
 
     // Check for multi-exposure section headers in .lns files: e.g. "10 Seconds", "1 Second", "0.5 Seconds", "5 seconds"
     const exposureHeaderMatch = raw.match(
@@ -215,6 +312,11 @@ export function auditCalibrationFile(
       raw.startsWith(';') ||
       /^[a-zA-Z]/.test(raw)
     ) {
+      continue;
+    }
+
+    // Skip lines that have trailing "//" WiRE X parameter comments
+    if (raw.includes('//')) {
       continue;
     }
 
@@ -422,6 +524,73 @@ export function auditCalibrationFile(
       status,
       issueMessages,
     });
+  }
+
+  // If this was a WiRE X GratingCalData report, populate parsedLines from the aggregated Error data rows
+  if (isWireXGratingCalData && wireXErrorAggregates.size > 0) {
+    for (const agg of wireXErrorAggregates.values()) {
+      const wavenumberCm1 = agg.wavenumberCm1;
+      let closestCat: NeonLine | null = null;
+      let minDiff = Infinity;
+      for (const cat of NEON_CATALOG) {
+        const diff = Math.abs(cat.wavenumber - wavenumberCm1);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestCat = cat;
+        }
+      }
+      const matchedCatalogLine = minDiff <= 3.5 ? closestCat : null;
+      const catalogDeltaCm1 = closestCat
+        ? Number((wavenumberCm1 - closestCat.wavenumber).toFixed(2))
+        : null;
+
+      const inScanRange =
+        wavenumberCm1 <= solution.scanHighCm1 + 5 &&
+        wavenumberCm1 >= solution.scanLowCm1 - 5;
+      const inAbsRamanRange =
+        wavenumberCm1 <= solution.absHighCm1 + 5 &&
+        wavenumberCm1 >= solution.absLowCm1 - 5;
+
+      const rmsErr = Math.sqrt(agg.sumSqError / Math.max(1, agg.hitCount));
+      const inlineNote = `WiRE X Measured: ${agg.hitCount} hits across px ${agg.minPixel.toFixed(1)}–${agg.maxPixel.toFixed(1)} (steps ${agg.minStep} to ${agg.maxStep}) · RMS Err ${rmsErr.toFixed(4)} cm⁻¹ (max |Δ| ${agg.maxAbsError.toFixed(4)} cm⁻¹)`;
+
+      const originAnalysis = analyzeSpectralLineOrigin(
+        wavenumberCm1,
+        matchedCatalogLine?.relativeIntensity
+      );
+      const issueMessages: string[] = [];
+      let status: 'valid' | 'warning' | 'error' = 'valid';
+
+      if (!matchedCatalogLine) {
+        status = 'error';
+        issueMessages.push(originAnalysis.explanation);
+      } else if (originAnalysis.classification === 'trace_gas_impurity') {
+        issueMessages.push(originAnalysis.explanation);
+      }
+      issueMessages.push(inlineNote);
+
+      parsedLines.push({
+        rawLineNumber: agg.rawLineNumber,
+        rawText: `${wavenumberCm1.toFixed(2)}\t(${agg.hitCount} hits, RMS ${rmsErr.toFixed(4)} cm⁻¹)`,
+        wavenumberCm1,
+        matchedCatalogLine,
+        catalogDeltaCm1,
+        originAnalysis,
+        declaredRole:
+          solution.primaryCalibrationLine &&
+          Math.abs(wavenumberCm1 - solution.primaryCalibrationLine.wavenumber) <
+            1.5
+            ? 'PCL'
+            : 'STANDARD',
+        declaredIntensity: matchedCatalogLine?.relativeIntensity,
+        inlineNote,
+        inScanRange,
+        inAbsRamanRange,
+        occurrencesAcrossCcd: agg.hitCount,
+        status,
+        issueMessages,
+      });
+    }
   }
 
   // Sort parsed lines high-to-low wavenumber for analysis

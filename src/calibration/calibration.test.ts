@@ -568,4 +568,65 @@ test('Room Temperature thermo-optic & Edlen air refractive index model dynamical
   );
 });
 
+test('Empirical Virsa 785nm 1500 l/mm NIR calibration matches 9300-13400 cm-1 scan range, 20 lines (12 Ne I + 8 Penning Ar I), and parses WiRE X GratingCalData report', () => {
+  const preset785 = FACTORY_PRESETS.find(
+    (p) => p.id === 'virsa-785-1500-empirical'
+  )!;
+  assert.ok(preset785);
+  const sol785 = solveCalibration(preset785.params);
+  assert.equal(sol785.scanLowCm1, 9300.0);
+  assert.equal(sol785.scanHighCm1, 13400.0);
+  assert.equal(sol785.scanSpanCm1, 4100.0);
+
+  const audit785 = auditCalibrationFile(
+    preset785.sampleFileName,
+    preset785.sampleFileContent,
+    preset785.params
+  );
+  assert.equal(audit785.parsedLines.length, 20);
+  assert.equal(audit785.spectralOriginSummary.totalAnalyzed, 20);
+  assert.equal(audit785.spectralOriginSummary.authenticNe1Count, 12);
+  assert.equal(audit785.spectralOriginSummary.traceImpurityCount, 8);
+  assert.equal(audit785.lowestLineAnalysis?.lowestWavenumberCm1, 9551.05);
+
+  // Verify WiRE X GratingCalData report parser extracts headers and aggregates error table rows
+  const sampleGratingCalData = `785 P2 HiRes // Laser name
+1500 // Grating groove density (lines / mm)
+9300 // Wavenumber start
+13400 // Wavenumber end
+50 // Wavenumber step
+// Resulting calibration parameters
+-0.010755 // Zero offset
+-1316.00 // Motor step size
+37.7200 // Included angle
+197.00 // Focal length
+0.0573 // RMS deviation
+// Error data
+// Line\tPixel\tStep\tError
+9551.05\t65.75\t-70519\t-0.2584
+9551.05\t936.26\t-76957\t-0.1710
+10609.65\t21.92\t-62614\t0.0258
+10609.65\t985.39\t-68937\t0.0029
+12581.50\t23.44\t-48324\t-0.0297
+12581.50\t992.56\t-54383\t-0.0680`;
+
+  const auditCalData = auditCalibrationFile(
+    '785nm_1500_GratingCalData.txt',
+    sampleGratingCalData,
+    preset785.params
+  );
+  assert.equal(auditCalData.detectedHeaders.laserNm, 785);
+  assert.equal(auditCalData.detectedHeaders.gratingLinesPerMm, 1500);
+  assert.equal(auditCalData.detectedHeaders.scanLowCm1, 9300);
+  assert.equal(auditCalData.detectedHeaders.scanHighCm1, 13400);
+  assert.equal(auditCalData.detectedHeaders.motorStepTicks, 50);
+  assert.equal(auditCalData.parsedLines.length, 3);
+  const line9551 = auditCalData.parsedLines.find(
+    (p) => Math.abs(p.wavenumberCm1 - 9551.05) < 0.01
+  )!;
+  assert.equal(line9551.occurrencesAcrossCcd, 2);
+  assert.equal(line9551.originAnalysis.primarySpecies, 'Ar I');
+});
+
+
 

@@ -41,6 +41,15 @@ export const VIRSA_CALIBRATED_2400_FOCAL_LENGTH_MM = 202.7247295;
 export const VIRSA_FOCAL_CORRECTION_2400 = 4.2669245e-5;
 export const VIRSA_DEFAULT_INCLUDED_ANGLE_RAD = 0.6632;
 export const VIRSA_CALIBRATED_2400_INCLUDED_ANGLE_RAD = 0.66057;
+// Empirical Virsa 785nm / 1500 l/mm optical bench parameters (GCU670 / F9NH53, 785nm_1500_GratingCalData.txt)
+export const VIRSA_CALIBRATED_1500_FOCAL_LENGTH_MM = 197.004;
+export const VIRSA_FOCAL_CORRECTION_1500 = 1.08996e-5;
+export const VIRSA_CALIBRATED_1500_INCLUDED_ANGLE_DEG = 37.720012;
+export const VIRSA_CALIBRATED_1500_INCLUDED_ANGLE_RAD =
+  (37.720012 * Math.PI) / 180; // 0.6583383 rad
+export const VIRSA_1500_ZERO_OFFSET_DEG = -0.010755;
+export const VIRSA_1500_BEFORE_CAL_RMS_CM1 = 11.786656;
+export const VIRSA_1500_AFTER_CAL_RMS_CM1 = 0.057281;
 export const VIRSA_PIXEL_PITCH_MM = -0.026;
 export const VIRSA_ACTIVE_X_MIN_PX = 18;
 export const VIRSA_ACTIVE_X_MAX_PX = 1032;
@@ -1002,6 +1011,24 @@ export function calculateScanRangeBounds(
         ),
         scanLowCm1: Number(
           (14000.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+      };
+    }
+
+    // Virsa 785nm / 1500 l/mm empirical WiRE X scan range: 9300 to 13400 cm^-1 (4100 cm^-1 span -> 82 steps @ 50 cm^-1)
+    if (
+      spectrograph === 'Virsa' &&
+      Math.abs(laserNm - 785) < 0.5 &&
+      gratingLinesPerMm === 1500 &&
+      Math.abs(absHighCm1 - 12689) < 0.5 &&
+      (Math.abs(absLowCm1 - 9239) < 0.5 || Math.abs(absLowCm1 - 9800) < 0.5)
+    ) {
+      return {
+        scanHighCm1: Number(
+          (13400.0 + thermalHigh.thermalWavenumberDriftCm1).toFixed(1)
+        ),
+        scanLowCm1: Number(
+          (9300.0 + thermalLow.thermalWavenumberDriftCm1).toFixed(1)
         ),
       };
     }
