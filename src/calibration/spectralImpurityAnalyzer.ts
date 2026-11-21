@@ -461,6 +461,32 @@ export const TRACE_GAS_IMPURITY_CATALOG: ImpurityOrHigherOrderReference[] = [
     originNote: 'NIR Argon I 4s–4p line at 978.450 nm (observed at 10220.24 cm⁻¹, intensity 150 in Virsa_785_1500.lns from Penning Argon)',
   },
   {
+    id: 'ar1-1023.16',
+    species: 'Ar I',
+    diffractionOrder: 1,
+    trueWavelengthAirNm: 1023.155,
+    trueWavenumberAirCm1: 9773.69,
+    trueWavenumberVacCm1: airNmToVacuumWavenumberCm1(1023.155),
+    apparentWavelengthAirNm: 1023.155,
+    apparentWavenumberAirCm1: 9773.69,
+    relativeIntensity: 310,
+    transition: '4p[1/2]1 - 5s[3/2]2',
+    originNote: 'Deep-NIR Argon I line at 1023.155 nm (observed at 9773.69 cm⁻¹, 104 e⁻/cm⁻¹ on Virsa 785nm 1500 l/mm from Penning Argon)',
+  },
+  {
+    id: 'ar1-1040.78',
+    species: 'Ar I',
+    diffractionOrder: 1,
+    trueWavelengthAirNm: 1040.782,
+    trueWavenumberAirCm1: 9608.16,
+    trueWavenumberVacCm1: airNmToVacuumWavenumberCm1(1040.782),
+    apparentWavelengthAirNm: 1040.782,
+    apparentWavenumberAirCm1: 9608.16,
+    relativeIntensity: 280,
+    transition: '4p[5/2]3 - 5s[3/2]2',
+    originNote: 'Deep-NIR Argon I line at 1040.782 nm (observed at 9608.16 cm⁻¹, 53 e⁻/cm⁻¹ on Virsa 785nm 1500 l/mm from Penning Argon)',
+  },
+  {
     id: 'ar1-1047.01',
     species: 'Ar I',
     diffractionOrder: 1,
@@ -471,7 +497,7 @@ export const TRACE_GAS_IMPURITY_CATALOG: ImpurityOrHigherOrderReference[] = [
     apparentWavenumberAirCm1: 9551.05,
     relativeIntensity: 420,
     transition: '4s[3/2]1 - 4p[1/2]0',
-    originNote: 'Deep-NIR Argon I 4s–4p line at 1047.005 nm near Silicon CCD cutoff (observed at 9551.05 cm⁻¹, intensity 50 in Virsa_785_1500.lns from Penning Argon)',
+    originNote: 'Deep-NIR Argon I 4s–4p line at 1047.005 nm near Silicon CCD cutoff (observed at 9551.05 cm⁻¹, 97 e⁻/cm⁻¹ on Virsa 785nm 1500 l/mm from Penning Argon)',
   },
   // Mercury I (Hg I) ambient fluorescent lamp / Hg-Ar lamp lines
   {
@@ -786,6 +812,8 @@ const PENNING_ARGON_LINES_IN_LNS_CM1 = [
   10961.1, // Ar I 912.297 nm (10961.34 cm^-1 air; 10961.35 in Virsa_785_1500.lns)
   10354.34, // Ar I 965.779 nm (10354.34 cm^-1 air in Virsa_785_1500.lns)
   10220.24, // Ar I 978.450 nm (10220.24 cm^-1 air in Virsa_785_1500.lns)
+  9773.69, // Ar I 1023.155 nm (9773.69 cm^-1 air on Virsa 785nm 1500 l/mm)
+  9608.16, // Ar I 1040.782 nm (9608.16 cm^-1 air on Virsa 785nm 1500 l/mm)
   9551.05, // Ar I 1047.005 nm (9551.05 cm^-1 air in Virsa_785_1500.lns)
 ];
 
